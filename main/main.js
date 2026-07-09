@@ -22,7 +22,26 @@ const projInfo = {
  // Main window init
  // define window in global scope to prevent garbage collection
  let win = null;
+ let splash = null;
  app.on('ready', () => {
+  // show splash screen immediately while the IDE boots
+  splash = new BrowserWindow({
+    width: 480,
+    height: 340,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    show: false,
+    alwaysOnTop: true,
+    center: true,
+    skipTaskbar: true
+  });
+  splash.loadURL('file://' + path.join(__dirname, 'splash.html'));
+  splash.once('ready-to-show', () => {
+    splash.show();
+  });
+
    // initialize main window
   win = new BrowserWindow({
     width: 1200,
@@ -40,6 +59,10 @@ const projInfo = {
 
   // Wait for window to be ready before showing to avoid white loading screen
   win.once('ready-to-show', () => {
+    if (splash && !splash.isDestroyed()) {
+      splash.close();
+      splash = null;
+    }
     win.show();
   });
 

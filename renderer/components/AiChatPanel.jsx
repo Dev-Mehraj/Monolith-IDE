@@ -376,33 +376,34 @@ export default class AiChatPanel extends React.Component {
     var cloudModels = models.filter(function (m) { return m.source !== 'local'; });
 
     return (
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid #333' }}>
+      <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(0, 240, 255, 0.08)' }}>
         <select
           value={selectedModel}
           onChange={this.handleModelChange}
           style={{
             width: '100%',
-            padding: '6px 8px',
-            background: '#2a2a2a',
-            color: '#e0e0e0',
-            border: '1px solid #444',
-            borderRadius: '4px',
+            padding: '7px 10px',
+            background: '#0a0f1a',
+            color: '#e2e8f0',
+            border: '1px solid rgba(0, 240, 255, 0.15)',
+            borderRadius: '6px',
             fontSize: '12px',
             outline: 'none',
+            fontFamily: 'inherit',
           }}
         >
           <option value="">Select a model...</option>
           {localModels.length > 0 && (
             <optgroup label="Local Models">
               {localModels.map(function (m) {
-                return <option key={m.name} value={m.name}>{m.name + (m.supportsTools ? ' 🔧' : '')}</option>;
+                return <option key={m.name} value={m.name}>{m.name + (m.supportsTools ? ' [tools]' : '')}</option>;
               })}
             </optgroup>
           )}
           {cloudModels.length > 0 && (
             <optgroup label="Cloud Models">
               {cloudModels.map(function (m) {
-                return <option key={m.name} value={m.name}>{m.name + (m.supportsTools ? ' 🔧' : '')}</option>;
+                return <option key={m.name} value={m.name}>{m.name + (m.supportsTools ? ' [tools]' : '')}</option>;
               })}
             </optgroup>
           )}
@@ -417,39 +418,43 @@ export default class AiChatPanel extends React.Component {
     var self = this;
 
     return (
-      <div style={{ borderBottom: '1px solid #333' }}>
+      <div style={{ borderBottom: '1px solid rgba(0, 240, 255, 0.08)' }}>
         <button
           onClick={function () { self.setState({ showSystemPrompt: !showSystemPrompt }); }}
           style={{
             width: '100%',
-            padding: '4px 12px',
+            padding: '5px 12px',
             background: 'transparent',
             border: 'none',
-            color: '#888',
+            color: '#64748b',
             cursor: 'pointer',
             fontSize: '11px',
             textAlign: 'left',
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
+            fontFamily: 'inherit',
+            transition: 'color 150ms',
           }}
+          onMouseEnter={function(e) { e.target.style.color = '#00f0ff'; }}
+          onMouseLeave={function(e) { e.target.style.color = '#64748b'; }}
         >
-          <span>{showSystemPrompt ? '▼' : '▶'}</span>
+          <span style={{ transition: 'transform 200ms', display: 'inline-block', transform: showSystemPrompt ? 'rotate(0)' : 'rotate(-90deg)' }}>▼</span>
           System Prompt
         </button>
         {showSystemPrompt && (
           <textarea
             value={systemPrompt}
             onChange={this.handleSystemPromptChange}
-            placeholder="Enter a system prompt to set the AI's behavior..."
+            placeholder="Enter a system prompt..."
             rows={3}
             style={{
               width: '100%',
-              padding: '6px 12px',
-              background: '#1a1a1a',
-              color: '#ccc',
+              padding: '8px 12px',
+              background: '#050a12',
+              color: '#94a3b8',
               border: 'none',
-              borderTop: '1px solid #333',
+              borderTop: '1px solid rgba(0, 240, 255, 0.08)',
               fontSize: '11px',
               resize: 'vertical',
               outline: 'none',
@@ -468,14 +473,14 @@ export default class AiChatPanel extends React.Component {
     return (
       <div
         style={{
-          padding: '4px 12px',
-          borderBottom: '1px solid #333',
+          padding: '5px 12px',
+          borderBottom: '1px solid rgba(0, 240, 255, 0.08)',
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
         }}
       >
-        <label style={{ color: '#888', fontSize: '11px', whiteSpace: 'nowrap' }}>
+        <label style={{ color: '#64748b', fontSize: '11px', whiteSpace: 'nowrap' }}>
           {'Temp: ' + temperature.toFixed(1)}
         </label>
         <input
@@ -485,14 +490,14 @@ export default class AiChatPanel extends React.Component {
           step="0.1"
           value={temperature}
           onChange={this.handleTemperatureChange}
-          style={{ flex: 1, height: '4px', cursor: 'pointer' }}
+          style={{ flex: 1, height: '4px', cursor: 'pointer', accentColor: '#00f0ff' }}
         />
       </div>
     );
   }
 
   renderToolCard(msg, i) {
-    var statusIcon = msg.executionStatus === 'running' ? '⏳' : msg.executionStatus === 'error' ? '⚠️' : '✅';
+    var statusIcon = msg.executionStatus === 'running' ? '>' : msg.executionStatus === 'error' ? '!' : '*';
     var argsSummary = msg.args ? JSON.stringify(msg.args) : '';
     var resultSummary = msg.executionStatus === 'error'
       ? msg.error
@@ -502,19 +507,19 @@ export default class AiChatPanel extends React.Component {
       <div
         key={i}
         style={{
-          marginBottom: '12px',
+          marginBottom: '10px',
           padding: '8px 10px',
-          borderRadius: '6px',
-          background: '#232a23',
-          borderLeft: '3px solid #6a9955',
+          borderRadius: '8px',
+          background: 'rgba(0, 255, 136, 0.04)',
+          borderLeft: '2px solid #00ff88',
           fontSize: '12px',
         }}
       >
-        <div style={{ color: '#9fd39f', fontWeight: '600' }}>
-          {statusIcon + ' ' + msg.name + '(' + argsSummary + ')'}
+        <div style={{ color: '#00ff88', fontWeight: '600', fontFamily: 'monospace', fontSize: '11px' }}>
+          {'[' + statusIcon + '] ' + msg.name + '(' + argsSummary + ')'}
         </div>
         {resultSummary && (
-          <div style={{ color: '#999', marginTop: '4px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          <div style={{ color: '#4a5568', marginTop: '4px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'monospace', fontSize: '11px' }}>
             {resultSummary}
           </div>
         )}
@@ -525,8 +530,8 @@ export default class AiChatPanel extends React.Component {
   renderApprovalCard(msg, i) {
     var self = this;
     var statusLabel = {
-      pending: 'Waiting for approval',
-      approved: msg.executionStatus === 'running' ? 'Running...' : msg.executionStatus === 'error' ? 'Failed' : 'Approved',
+      pending: 'Awaiting authorization',
+      approved: msg.executionStatus === 'running' ? 'Executing...' : msg.executionStatus === 'error' ? 'Failed' : 'Authorized',
       denied: 'Denied',
     }[msg.approvalStatus];
 
@@ -534,67 +539,94 @@ export default class AiChatPanel extends React.Component {
       <div
         key={i}
         style={{
-          marginBottom: '12px',
-          padding: '8px 10px',
-          borderRadius: '6px',
-          background: '#2a2620',
-          borderLeft: '3px solid #d9a34a',
+          marginBottom: '10px',
+          padding: '10px 12px',
+          borderRadius: '8px',
+          background: 'rgba(255, 107, 43, 0.05)',
+          borderLeft: '2px solid #ff6b2b',
           fontSize: '12px',
         }}
       >
-        <div style={{ color: '#e0b86a', fontWeight: '600', marginBottom: '6px' }}>
-          {'🔧 ' + msg.name + ' — requires approval'}
+        <div style={{ color: '#ff6b2b', fontWeight: '600', marginBottom: '6px', fontSize: '11px', letterSpacing: '0.5px' }}>
+          {'TOOL: ' + msg.name}
         </div>
         <pre
           style={{
             margin: 0,
-            padding: '6px',
-            background: '#1a1a1a',
-            borderRadius: '4px',
-            color: '#ccc',
+            padding: '8px',
+            background: '#050a12',
+            borderRadius: '6px',
+            color: '#94a3b8',
             fontSize: '11px',
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
             maxHeight: '160px',
             overflowY: 'auto',
+            border: '1px solid rgba(0, 240, 255, 0.08)',
+            fontFamily: 'monospace',
           }}
         >
           {msg.preview}
         </pre>
         {msg.approvalStatus === 'pending' ? (
-          <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+          <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
             <button
               onClick={function () { self.handleApprove(msg.id, true); }}
-              style={{ padding: '4px 10px', background: '#3a8fe0', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
+              style={{
+                padding: '5px 14px',
+                background: 'linear-gradient(135deg, rgba(0, 128, 255, 0.3), rgba(0, 240, 255, 0.2))',
+                color: '#00f0ff',
+                border: '1px solid rgba(0, 240, 255, 0.3)',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontWeight: '600',
+                letterSpacing: '0.5px',
+                fontFamily: 'inherit',
+                transition: 'all 150ms',
+              }}
             >
-              Approve
+              APPROVE
             </button>
             <button
               onClick={function () { self.handleApprove(msg.id, false); }}
-              style={{ padding: '4px 10px', background: '#444', color: '#ccc', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
+              style={{
+                padding: '5px 14px',
+                background: 'rgba(30, 41, 59, 0.5)',
+                color: '#64748b',
+                border: '1px solid rgba(0, 240, 255, 0.08)',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontWeight: '600',
+                fontFamily: 'inherit',
+                transition: 'all 150ms',
+              }}
             >
-              Deny
+              DENY
             </button>
           </div>
         ) : (
-          <div style={{ color: '#888', marginTop: '6px' }}>{statusLabel}</div>
+          <div style={{ color: '#64748b', marginTop: '6px', fontSize: '11px' }}>{statusLabel}</div>
         )}
         {msg.executionStatus === 'error' && msg.error && (
-          <div style={{ color: '#c66', marginTop: '4px' }}>{msg.error}</div>
+          <div style={{ color: '#ff2d95', marginTop: '4px', fontSize: '11px' }}>{msg.error}</div>
         )}
         {msg.executionStatus === 'done' && msg.result && (
           <pre
             style={{
               margin: '6px 0 0',
-              padding: '6px',
-              background: '#1a1a1a',
-              borderRadius: '4px',
-              color: '#999',
+              padding: '8px',
+              background: '#050a12',
+              borderRadius: '6px',
+              color: '#4a5568',
               fontSize: '11px',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
               maxHeight: '160px',
               overflowY: 'auto',
+              fontFamily: 'monospace',
+              border: '1px solid rgba(0, 240, 255, 0.08)',
             }}
           >
             {JSON.stringify(msg.result).slice(0, 800)}
@@ -617,22 +649,23 @@ export default class AiChatPanel extends React.Component {
           flex: 1,
           overflowY: 'auto',
           padding: '8px 12px',
-          background: '#1e1e1e',
+          background: '#050a12',
         }}
       >
         {messages.length === 0 && (
           <div
             style={{
-              color: '#555',
+              color: '#2a3550',
               fontSize: '12px',
               textAlign: 'center',
               marginTop: '40px',
-              lineHeight: '1.6',
+              lineHeight: '1.8',
             }}
           >
-            Start a conversation with the AI.
+            <div style={{ fontSize: '28px', marginBottom: '8px', opacity: 0.5 }}>&#9672;</div>
+            Neural link ready.
             <br />
-            Type <strong style={{ color: '#777' }}>/help</strong> for commands.
+            Type <strong style={{ color: '#00f0ff' }}>/help</strong> for commands.
           </div>
         )}
         {messages.map(function (msg, i) {
@@ -646,28 +679,31 @@ export default class AiChatPanel extends React.Component {
           if (msg.role === 'assistant' && !msg.content.trim() && !hasThinking) {
             return null;
           }
+          var isUser = msg.role === 'user';
           return (
             <div
               key={i}
               style={{
-                marginBottom: '12px',
-                padding: '8px 10px',
-                borderRadius: '6px',
-                background: msg.role === 'user' ? '#2a3a4a' : '#2a2a2a',
-                borderLeft: '3px solid ' + (msg.role === 'user' ? '#4a90d9' : '#6a9955'),
+                marginBottom: '10px',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                background: isUser ? 'rgba(0, 128, 255, 0.06)' : 'rgba(0, 240, 255, 0.04)',
+                borderLeft: '2px solid ' + (isUser ? '#0080ff' : '#00f0ff'),
+                animation: 'fadeInUp 200ms ease-out',
               }}
             >
               <div
                 style={{
-                  fontSize: '10px',
-                  fontWeight: '600',
+                  fontSize: '9px',
+                  fontWeight: '700',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  color: msg.role === 'user' ? '#4a90d9' : '#6a9955',
-                  marginBottom: '4px',
+                  letterSpacing: '1.5px',
+                  color: isUser ? '#0080ff' : '#00f0ff',
+                  marginBottom: '6px',
+                  textShadow: '0 0 8px ' + (isUser ? 'rgba(0,128,255,0.3)' : 'rgba(0,240,255,0.3)'),
                 }}
               >
-                {msg.role === 'user' ? 'You' : 'AI'}
+                {isUser ? 'YOU' : 'AI'}
               </div>
               {hasThinking && (
                 <div style={{ marginBottom: msg.content.trim() ? '6px' : '0' }}>
@@ -676,30 +712,31 @@ export default class AiChatPanel extends React.Component {
                     style={{
                       background: 'transparent',
                       border: 'none',
-                      color: '#888',
+                      color: '#64748b',
                       cursor: 'pointer',
                       fontSize: '11px',
                       padding: 0,
                       display: 'flex',
                       alignItems: 'center',
                       gap: '4px',
+                      fontFamily: 'inherit',
                     }}
                   >
-                    <span>{msg.thinkingExpanded ? '▼' : '▶'}</span>
-                    <span>{'💭 Thinking'}</span>
+                    <span style={{ display: 'inline-block', transform: msg.thinkingExpanded ? 'rotate(0)' : 'rotate(-90deg)', transition: 'transform 200ms' }}>▼</span>
+                    <span>Thinking</span>
                   </button>
                   {msg.thinkingExpanded && (
                     <div
                       style={{
-                        color: '#888',
+                        color: '#4a5568',
                         fontSize: '12px',
                         fontStyle: 'italic',
                         lineHeight: '1.4',
                         whiteSpace: 'pre-wrap',
                         wordBreak: 'break-word',
                         marginTop: '4px',
-                        paddingLeft: '4px',
-                        borderLeft: '2px solid #444',
+                        paddingLeft: '8px',
+                        borderLeft: '1px solid rgba(0, 240, 255, 0.15)',
                       }}
                     >
                       {msg.thinking}
@@ -710,7 +747,7 @@ export default class AiChatPanel extends React.Component {
               {msg.content.trim() && (
                 <div
                   style={{
-                    color: '#e0e0e0',
+                    color: '#e2e8f0',
                     fontSize: '13px',
                     lineHeight: '1.5',
                     whiteSpace: 'pre-wrap',
@@ -726,16 +763,16 @@ export default class AiChatPanel extends React.Component {
         {isLoading && (
           <div
             style={{
-              marginBottom: '12px',
-              padding: '8px 10px',
-              borderRadius: '6px',
-              background: '#2a2a2a',
-              borderLeft: '3px solid #6a9955',
-              color: '#888',
+              marginBottom: '10px',
+              padding: '10px 12px',
+              borderRadius: '8px',
+              background: 'rgba(0, 240, 255, 0.04)',
+              borderLeft: '2px solid #00f0ff',
+              color: '#64748b',
               fontSize: '12px',
             }}
           >
-            <span className="thinking-indicator">Thinking</span>
+            <span className="thinking-indicator">Processing</span>
           </div>
         )}
         <div ref={this.messagesEndRef} />
@@ -747,80 +784,88 @@ export default class AiChatPanel extends React.Component {
     var inputValue = this.state.inputValue;
     var isLoading = this.state.isLoading;
     var selectedModel = this.state.selectedModel;
+    var canSend = inputValue.trim() && selectedModel;
 
     return (
       <div
         style={{
-          borderTop: '1px solid #333',
-          padding: '8px 12px',
-          background: '#252525',
+          borderTop: '1px solid rgba(0, 240, 255, 0.08)',
+          padding: '10px 12px',
+          background: '#0d1320',
           flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
           <textarea
             ref={this.inputRef}
             value={inputValue}
             onChange={this.handleInputChange}
             onKeyDown={this.handleInputKeyDown}
-            placeholder={
-              selectedModel
-                ? 'Type a message or / for commands...'
-                : 'Select a model first...'
-            }
+            placeholder={selectedModel ? 'Enter command...' : 'Select model first...'}
             disabled={!selectedModel}
             rows={2}
             style={{
               flex: 1,
               padding: '8px 10px',
-              background: '#1a1a1a',
-              color: '#e0e0e0',
-              border: '1px solid #444',
-              borderRadius: '6px',
+              background: '#050a12',
+              color: '#e2e8f0',
+              border: '1px solid rgba(0, 240, 255, 0.12)',
+              borderRadius: '8px',
               fontSize: '13px',
               resize: 'none',
               outline: 'none',
               fontFamily: 'inherit',
               lineHeight: '1.4',
+              transition: 'border-color 200ms',
             }}
+            onFocus={function(e) { e.target.style.borderColor = 'rgba(0, 240, 255, 0.3)'; }}
+            onBlur={function(e) { e.target.style.borderColor = 'rgba(0, 240, 255, 0.12)'; }}
           />
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {isLoading ? (
               <button
                 onClick={this.handleStop}
-                title="Stop generating"
+                title="Stop"
                 style={{
                   flex: 1,
-                  padding: '6px 12px',
-                  background: '#b33',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
+                  padding: '6px 14px',
+                  background: 'rgba(255, 45, 149, 0.15)',
+                  color: '#ff2d95',
+                  border: '1px solid rgba(255, 45, 149, 0.3)',
+                  borderRadius: '8px',
                   cursor: 'pointer',
-                  fontSize: '12px',
+                  fontSize: '14px',
                   fontWeight: '600',
+                  fontFamily: 'inherit',
+                  transition: 'all 150ms',
                 }}
               >
-                ■
+                &#9632;
               </button>
             ) : (
               <button
                 onClick={this.handleSend}
-                disabled={!inputValue.trim() || !selectedModel}
-                title="Send message"
+                disabled={!canSend}
+                title="Send"
                 style={{
                   flex: 1,
-                  padding: '6px 12px',
-                  background: inputValue.trim() && selectedModel ? '#3a8fe0' : '#333',
-                  color: inputValue.trim() && selectedModel ? '#fff' : '#666',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: inputValue.trim() && selectedModel ? 'pointer' : 'default',
+                  padding: '6px 14px',
+                  background: canSend
+                    ? 'linear-gradient(135deg, rgba(0, 128, 255, 0.3), rgba(0, 240, 255, 0.2))'
+                    : 'rgba(30, 41, 59, 0.5)',
+                  color: canSend ? '#00f0ff' : '#2a3550',
+                  border: canSend ? '1px solid rgba(0, 240, 255, 0.3)' : '1px solid transparent',
+                  borderRadius: '8px',
+                  cursor: canSend ? 'pointer' : 'default',
                   fontSize: '12px',
                   fontWeight: '600',
+                  letterSpacing: '0.5px',
+                  fontFamily: 'inherit',
+                  transition: 'all 200ms',
+                  textShadow: canSend ? '0 0 10px rgba(0, 240, 255, 0.3)' : 'none',
                 }}
               >
-                Send
+                SEND
               </button>
             )}
           </div>
@@ -830,14 +875,18 @@ export default class AiChatPanel extends React.Component {
             onClick={this.handleNewChat}
             title="New chat"
             style={{
-              padding: '3px 8px',
+              padding: '4px 10px',
               background: 'transparent',
-              border: '1px solid #444',
-              borderRadius: '4px',
-              color: '#888',
+              border: '1px solid rgba(0, 240, 255, 0.12)',
+              borderRadius: '6px',
+              color: '#64748b',
               cursor: 'pointer',
               fontSize: '11px',
+              fontFamily: 'inherit',
+              transition: 'all 150ms',
             }}
+            onMouseEnter={function(e) { e.target.style.borderColor = 'rgba(0, 240, 255, 0.3)'; e.target.style.color = '#00f0ff'; }}
+            onMouseLeave={function(e) { e.target.style.borderColor = 'rgba(0, 240, 255, 0.12)'; e.target.style.color = '#64748b'; }}
           >
             New Chat
           </button>
@@ -846,23 +895,27 @@ export default class AiChatPanel extends React.Component {
               onClick={this.insertActiveFileContext}
               title="Insert active file path"
               style={{
-                padding: '3px 8px',
+                padding: '4px 10px',
                 background: 'transparent',
-                border: '1px solid #444',
-                borderRadius: '4px',
-                color: '#888',
+                border: '1px solid rgba(0, 240, 255, 0.12)',
+                borderRadius: '6px',
+                color: '#64748b',
                 cursor: 'pointer',
                 fontSize: '11px',
+                fontFamily: 'inherit',
+                transition: 'all 150ms',
               }}
+              onMouseEnter={function(e) { e.target.style.borderColor = 'rgba(0, 240, 255, 0.3)'; e.target.style.color = '#00f0ff'; }}
+              onMouseLeave={function(e) { e.target.style.borderColor = 'rgba(0, 240, 255, 0.12)'; e.target.style.color = '#64748b'; }}
             >
               + File
             </button>
           )}
           <div style={{ flex: 1 }} />
-          <span style={{ color: '#555', fontSize: '10px' }}>
+          <span style={{ color: '#2a3550', fontSize: '10px', letterSpacing: '0.5px' }}>
             {this.state.models.length > 0
-              ? this.state.models.length + ' model(s) available'
-              : 'No models found'}
+              ? this.state.models.length + ' models'
+              : 'No models'}
           </span>
         </div>
       </div>
@@ -876,9 +929,9 @@ export default class AiChatPanel extends React.Component {
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
-          background: '#1e1e1e',
-          color: '#e0e0e0',
-          fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif',
+          background: '#0a0f1a',
+          color: '#e2e8f0',
+          fontFamily: 'inherit',
         }}
       >
         {this.renderModelSelector()}

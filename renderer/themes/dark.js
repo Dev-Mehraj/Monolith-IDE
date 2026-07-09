@@ -1,71 +1,98 @@
-/* @flow */
-
 export default {
   base: 'vs-dark',
   inherit: true,
   rules: [
-    { token: '', foreground: 'd9d7ce', background: '292A2B'  },
-    { token: 'invalid', foreground: 'ff3333' },
+    { token: '', foreground: 'e2e8f0', background: '050a12' },
+    { token: 'invalid', foreground: 'ff2d95' },
     { token: 'emphasis', fontstyle: 'italic' },
     { token: 'strong', fontstyle: 'bold' },
 
-    { token: 'variable', foreground: 'C7C7C7' },  // panda veriable
-    { token: 'variable.predefined', foreground: 'FF0000' }, // panda 
-    { token: 'constant', foreground: 'FFB86C' },  // panda const
-    { token: 'comment', foreground: '676B79', fontstyle: 'italic' },// panda comment
-    { token: 'comment.js', foreground: '008800' },
-    { token: 'comment.css', foreground: '008800' },
-    { token: 'comment.scss', foreground: '008800' },
+    { token: 'variable', foreground: 'e2e8f0' },
+    { token: 'variable.predefined', foreground: 'ff6b2b' },
+    { token: 'constant', foreground: 'ffb86c' },
+    { token: 'comment', foreground: '4a5568', fontstyle: 'italic' },
+    { token: 'comment.js', foreground: '4a5568', fontstyle: 'italic' },
+    { token: 'comment.css', foreground: '4a5568', fontstyle: 'italic' },
+    { token: 'comment.scss', foreground: '4a5568', fontstyle: 'italic' },
     { token: 'number', foreground: 'ff9d45' },
     { token: 'number.hex', foreground: 'ff9d45' },
-    { token: 'regexp', foreground: '95e6cb' },
-    { token: 'annotation', foreground: '5ccfe6' },
-    { token: 'type', foreground: '6DB1FF' },  // panda user-defined - blue
+    { token: 'regexp', foreground: '00ff88' },
+    { token: 'annotation', foreground: '00f0ff' },
+    { token: 'type', foreground: '0080ff' },
 
-    { token: 'delimiter', foreground: 'd9d7ce' },
-    { token: 'delimiter.html', foreground: 'd9d7ce' },
-    { token: 'delimiter.xml', foreground: 'd9d7ce' },
+    { token: 'delimiter', foreground: '64748b' },
+    { token: 'delimiter.html', foreground: '64748b' },
+    { token: 'delimiter.xml', foreground: '64748b' },
 
-    { token: 'tag', foreground: 'FFC990' }, // panda class keyword - orange
-    { token: 'tag.id.jade', foreground: 'FFC990' },
-    { token: 'tag.class.jade', foreground: 'FFC990' },  // panda class
-    { token: 'meta.scss', foreground: 'FFC990' },
-    { token: 'metatag', foreground: '80d4ff' },
-    { token: 'metatag.content.html', foreground: 'bae67e' },
-    { token: 'metatag.html', foreground: '80d4ff' },
-    { token: 'metatag.xml', foreground: '80d4ff' },
+    { token: 'tag', foreground: 'ff6b2b' },
+    { token: 'tag.id.jade', foreground: 'ff6b2b' },
+    { token: 'tag.class.jade', foreground: 'ff6b2b' },
+    { token: 'meta.scss', foreground: 'ff6b2b' },
+    { token: 'metatag', foreground: '00f0ff' },
+    { token: 'metatag.content.html', foreground: '00ff88' },
+    { token: 'metatag.html', foreground: '00f0ff' },
+    { token: 'metatag.xml', foreground: '00f0ff' },
     { token: 'metatag.php', fontstyle: 'bold' },
 
-    { token: 'key', foreground: '5ccfe6' },
-    { token: 'string.key.json', foreground: '5ccfe6' },
-    { token: 'string.value.json', foreground: 'bae67e' },
+    { token: 'key', foreground: '00f0ff' },
+    { token: 'string.key.json', foreground: '00f0ff' },
+    { token: 'string.value.json', foreground: '00ff88' },
 
-    { token: 'attribute.name', foreground: '5ccfe6' },
-    { token: 'attribute.value', foreground: 'bae67e' },
+    { token: 'attribute.name', foreground: '00f0ff' },
+    { token: 'attribute.value', foreground: '00ff88' },
     { token: 'attribute.value.number', foreground: 'ff9d45' },
-    { token: 'attribute.value.unit', foreground: 'bae67e' },
-    { token: 'attribute.value.html', foreground: 'FFB86C' },  // panda html attribute
-    { token: 'attribute.value.xml', foreground: 'bae67e' },
+    { token: 'attribute.value.unit', foreground: '00ff88' },
+    { token: 'attribute.value.html', foreground: 'ffb86c' },
+    { token: 'attribute.value.xml', foreground: '00ff88' },
 
-    { token: 'string', foreground: '19F9D8' },  // panda string
-    { token: 'string.html', foreground: 'bae67e' },
-    { token: 'string.sql', foreground: 'bae67e' },
-    { token: 'string.yaml', foreground: 'bae67e' },
+    { token: 'string', foreground: '00ff88' },
+    { token: 'string.html', foreground: '00ff88' },
+    { token: 'string.sql', foreground: '00ff88' },
+    { token: 'string.yaml', foreground: '00ff88' },
 
-    { token: 'keyword', foreground: 'ff75b5' }, // panda keyword
-    { token: 'keyword.json', foreground: 'ffae57' },
-    { token: 'keyword.flow', foreground: 'ffae57' },
-    { token: 'keyword.flow.scss', foreground: 'ffae57' },
+    { token: 'keyword', foreground: 'a855f7' },
+    { token: 'keyword.json', foreground: 'ff9d45' },
+    { token: 'keyword.flow', foreground: 'ff9d45' },
+    { token: 'keyword.flow.scss', foreground: 'ff9d45' },
 
-    { token: 'operator.scss', foreground: '666666' }, //
-    { token: 'operator.sql', foreground: '778899' }, //
-    { token: 'operator.swift', foreground: '666666' }, //
-    { token: 'predefined.sql', foreground: 'ff00ff' }, //
+    { token: 'operator.scss', foreground: '64748b' },
+    { token: 'operator.sql', foreground: '64748b' },
+    { token: 'operator.swift', foreground: '64748b' },
+    { token: 'predefined.sql', foreground: 'a855f7' },
   ],
   colors: {
-    'editor.background': '#292A2B',   // panda background #292A2B
-    'editor.foreground': '#E6E6E6',   // panda foreground
-    'editorIndentGuide.background': '#393b41',
-    'editorIndentGuide.activeBackground': '#494b51',
+    'editor.background': '#050a12',
+    'editor.foreground': '#e2e8f0',
+    'editor.lineHighlightBackground': '#0d1320',
+    'editor.selectionBackground': '#1e3a5f',
+    'editor.inactiveSelectionBackground': '#152238',
+    'editorCursor.foreground': '#00f0ff',
+    'editorWhitespace.foreground': '#1a2236',
+    'editorIndentGuide.background': '#111827',
+    'editorIndentGuide.activeBackground': '#1e293b',
+    'editorLineNumber.foreground': '#2a3550',
+    'editorLineNumber.activeForeground': '#00f0ff',
+    'editorGutter.background': '#050a12',
+    'editor.selectionHighlightBackground': '#0080ff20',
+    'editor.wordHighlightBackground': '#00f0ff15',
+    'editor.wordHighlightStrongBackground': '#00f0ff25',
+    'editorBracketMatch.background': '#00f0ff15',
+    'editorBracketMatch.border': '#00f0ff40',
+    'editorOverviewRuler.border': '#111827',
+    'scrollbarSlider.background': '#00f0ff15',
+    'scrollbarSlider.hoverBackground': '#00f0ff30',
+    'scrollbarSlider.activeBackground': '#00f0ff40',
+    'editorWidget.background': '#0d1320',
+    'editorWidget.border': '#1a2236',
+    'editorSuggestWidget.background': '#0d1320',
+    'editorSuggestWidget.border': '#1a2236',
+    'editorSuggestWidget.selectedBackground': '#1e293b',
+    'editorSuggestWidget.highlightForeground': '#00f0ff',
+    'editorHoverWidget.background': '#0d1320',
+    'editorHoverWidget.border': '#1a2236',
+    'peekView.border': '#00f0ff30',
+    'peekViewEditor.background': '#0a0f1a',
+    'peekViewResult.background': '#0d1320',
+    'minimap.background': '#050a12',
   },
 };

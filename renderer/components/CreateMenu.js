@@ -1,26 +1,28 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-const CreateMenu = ({ id, createMenuHandler, type, path}) => {
+const CreateMenu = ({ id, createMenuHandler, type, path }) => {
   let contextMenu;
-  if(type === 'directory') {
+  if (type === 'directory') {
     contextMenu = (
       <div>
-        <button className="create-button" onClick={(event) => createMenuHandler(id, 'file', event, 'create')}>Create File</button>
-        <button className="create-button" onClick={(event) => createMenuHandler(id, 'directory', event, 'create')}>Create Directory</button>
-        <button className="create-button" onClick = {(event) => createMenuHandler(id, type, event, 'rename')}>Rename</button>
-        <button className="create-button" onClick = {(event) => createMenuHandler(id, type, event, 'delete', path)}>Delete</button>
+        <button className="create-button" onClick={(event) => createMenuHandler(id, 'file', event, 'create')}>New File</button>
+        <button className="create-button" onClick={(event) => createMenuHandler(id, 'directory', event, 'create')}>New Directory</button>
+        <div style={{ height: '1px', background: 'rgba(0, 240, 255, 0.08)', margin: '2px 8px' }} />
+        <button className="create-button" onClick={(event) => createMenuHandler(id, type, event, 'rename')}>Rename</button>
+        <button className="create-button" onClick={(event) => createMenuHandler(id, type, event, 'delete', path)} style={{ color: '#ff2d95' }}>Delete</button>
       </div>
-    )
-  } else{
+    );
+  } else {
     contextMenu = (
       <div>
-          <button className="create-button" onClick={(event) => createMenuHandler(id, type, event, 'rename')}>Rename</button>
-          <button className="create-button" onClick={(event) => createMenuHandler(id, type, event, 'delete', path)}>Delete</button>
-      </div>)
+        <button className="create-button" onClick={(event) => createMenuHandler(id, type, event, 'rename')}>Rename</button>
+        <button className="create-button" onClick={(event) => createMenuHandler(id, type, event, 'delete', path)} style={{ color: '#ff2d95' }}>Delete</button>
+      </div>
+    );
   }
   return (
-    <div className = "create-menu">
+    <div className="create-menu">
       {contextMenu}
     </div>
   );
@@ -28,7 +30,7 @@ const CreateMenu = ({ id, createMenuHandler, type, path}) => {
 
 CreateMenu.propTypes = {
   id: PropTypes.number.isRequired,
-  createMenuHandler: PropTypes.func.isRequired
+  createMenuHandler: PropTypes.func.isRequired,
 };
 
 export default CreateMenu;

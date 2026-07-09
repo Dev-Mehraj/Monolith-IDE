@@ -180,7 +180,6 @@ export default class TextEditor extends React.PureComponent {
     window.addEventListener('editor-insert', this._insertHandler);
     window.addEventListener('editor-request-selection', this._selectionHandler);
 
-    // initialize editor
     this.editor = monaco.editor.create(document.getElementById('editor-container'),
       {
         language: this._getLanguage(this.props.path),
@@ -189,10 +188,26 @@ export default class TextEditor extends React.PureComponent {
         wordWrap: 'on',
         scrollBeyondLastLine: false,
         automaticLayout: true,
-        glyphMargin: true
-
+        glyphMargin: true,
+        smoothScrolling: true,
+        cursorBlinking: 'smooth',
+        cursorSmoothCaretAnimation: true,
+        renderWhitespace: 'none',
+        minimap: { enabled: true, renderCharacters: false, scale: 1 },
+        padding: { top: 12, bottom: 12 },
+        fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, 'Courier New', monospace",
+        fontSize: 14,
+        lineHeight: 22,
+        fontLigatures: true,
+        renderLineHighlight: 'line',
+        overviewRulerBorder: false,
+        hideCursorInOverviewRuler: true,
+        scrollbar: {
+          verticalScrollbarSize: 6,
+          horizontalScrollbarSize: 6,
+          useShadows: false,
+        },
       },
-
     );
 
 

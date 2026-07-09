@@ -1,54 +1,261 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background-color: #1e1e1e;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      overflow: hidden;
-    }
-    .splash-container {
-      text-align: center;
-    }
-    .splash-logo {
-      width: 200px;
-      height: 200px;
-      animation: spin 20s linear infinite;
-    }
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    .splash-title {
-      color: #61DAFB;
-      font-size: 36px;
-      font-weight: 300;
-      margin-top: 20px;
-      letter-spacing: 4px;
-    }
-    .splash-loading {
-      color: #888;
-      font-size: 14px;
-      margin-top: 30px;
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 0.4; }
-      50% { opacity: 1; }
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Monolith</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+  }
+
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .splash-shell {
+    position: relative;
+    width: 500px;
+    height: 360px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: radial-gradient(120% 140% at 50% 12%, #0d1320 0%, #0a0f1a 45%, #050a12 100%);
+    border: 1px solid rgba(0, 240, 255, 0.15);
+    box-shadow:
+      0 0 0 1px rgba(0, 128, 255, 0.08),
+      0 40px 100px rgba(0, 0, 0, 0.7),
+      0 0 80px rgba(0, 240, 255, 0.08),
+      inset 0 1px 0 rgba(0, 240, 255, 0.05);
+  }
+
+  .grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0, 240, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 240, 255, 0.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+    -webkit-mask-image: radial-gradient(60% 60% at 50% 40%, rgba(0,0,0,0.8), transparent 75%);
+    mask-image: radial-gradient(60% 60% at 50% 40%, rgba(0,0,0,0.8), transparent 75%);
+    animation: driftGrid 20s linear infinite;
+  }
+
+  @keyframes driftGrid {
+    from { background-position: 0 0, 0 0; }
+    to { background-position: 64px 64px, 64px 64px; }
+  }
+
+  .scanline {
+    position: absolute;
+    left: 0; right: 0;
+    height: 100px;
+    background: linear-gradient(to bottom, transparent, rgba(0, 240, 255, 0.06), transparent);
+    animation: sweep 3.5s ease-in-out infinite;
+  }
+
+  @keyframes sweep {
+    0%   { top: -100px; }
+    50%  { top: 100%; }
+    100% { top: -100px; }
+  }
+
+  .vignette {
+    position: absolute;
+    inset: 0;
+    box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+  }
+
+  .splash-content {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 20px;
+  }
+
+  .logo-wrap {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin-bottom: 10px;
+  }
+
+  .logo-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 240, 255, 0.2);
+  }
+
+  .logo-ring.r1 { animation: spinCw 14s linear infinite; }
+  .logo-ring.r2 {
+    inset: 12px;
+    border-style: dashed;
+    border-color: rgba(168, 85, 247, 0.2);
+    animation: spinCcw 20s linear infinite;
+  }
+
+  @keyframes spinCw  { from { transform: rotate(0deg); }   to { transform: rotate(360deg); } }
+  @keyframes spinCcw { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+
+  .splash-logo {
+    position: absolute;
+    inset: 18px;
+    width: 84px;
+    height: 84px;
+    animation: pulseGlow 3s ease-in-out infinite;
+    filter: drop-shadow(0 0 20px rgba(0, 240, 255, 0.4));
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% { filter: drop-shadow(0 0 12px rgba(0, 240, 255, 0.3)); transform: scale(1); }
+    50%      { filter: drop-shadow(0 0 30px rgba(0, 240, 255, 0.6)); transform: scale(1.04); }
+  }
+
+  .splash-title {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: 10px;
+    background: linear-gradient(90deg, #00f0ff, #e2e8f0 45%, #a855f7);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .splash-subtitle {
+    color: #2a3550;
+    font-size: 10px;
+    letter-spacing: 4px;
+    margin-top: 6px;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  .progress-track {
+    position: relative;
+    width: 240px;
+    height: 2px;
+    margin-top: 36px;
+    background: rgba(0, 240, 255, 0.06);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
+    width: 40%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #0080ff, #00f0ff);
+    box-shadow: 0 0 16px rgba(0, 240, 255, 0.6);
+    animation: loadBar 1.8s ease-in-out infinite;
+  }
+
+  @keyframes loadBar {
+    0%   { left: -40%; width: 40%; }
+    50%  { left: 30%;  width: 55%; }
+    100% { left: 100%; width: 40%; }
+  }
+
+  .splash-status {
+    color: #2a3550;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    margin-top: 16px;
+    height: 16px;
+    text-transform: uppercase;
+  }
+
+  .splash-status::after {
+    content: '';
+    display: inline-block;
+    width: 1ch;
+    animation: dots 1.4s steps(4, end) infinite;
+  }
+
+  @keyframes dots {
+    0%   { content: ''; }
+    25%  { content: '.'; }
+    50%  { content: '..'; }
+    75%  { content: '...'; }
+    100% { content: ''; }
+  }
+
+  .corner {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-color: rgba(0, 240, 255, 0.3);
+    z-index: 2;
+  }
+  .corner.tl { top: 12px; left: 12px; border-top: 1px solid; border-left: 1px solid; }
+  .corner.tr { top: 12px; right: 12px; border-top: 1px solid; border-right: 1px solid; }
+  .corner.bl { bottom: 12px; left: 12px; border-bottom: 1px solid; border-left: 1px solid; }
+  .corner.br { bottom: 12px; right: 12px; border-bottom: 1px solid; border-right: 1px solid; }
+
+  .version-tag {
+    position: absolute;
+    bottom: 16px;
+    right: 24px;
+    color: #1a2236;
+    font-size: 9px;
+    letter-spacing: 2px;
+    z-index: 2;
+    text-transform: uppercase;
+  }
+</style>
 </head>
 <body>
-  <div class="splash-container">
-    <img src="./splash.svg" class="splash-logo" alt="Monolith" />
-    <div class="splash-title">MONOLITH</div>
-    <div class="splash-loading">Loading...</div>
+  <div class="splash-shell">
+    <div class="grid"></div>
+    <div class="scanline"></div>
+    <div class="vignette"></div>
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+
+    <div class="splash-content">
+      <div class="logo-wrap">
+        <div class="logo-ring r1"></div>
+        <div class="logo-ring r2"></div>
+        <img src="./splash.svg" class="splash-logo" alt="Monolith" />
+      </div>
+      <div class="splash-title">MONOLITH</div>
+      <div class="splash-subtitle">Integrated Development Environment</div>
+      <div class="progress-track"><div class="progress-fill"></div></div>
+      <div class="splash-status" id="status">Initializing systems</div>
+    </div>
+
+    <div class="version-tag">v3.0 // BOOTING</div>
   </div>
+
+  <script>
+    var messages = [
+      'Initializing systems',
+      'Loading editor core',
+      'Compiling modules',
+      'Establishing neural link'
+    ];
+    var i = 0;
+    var statusEl = document.getElementById('status');
+    setInterval(function () {
+      i = (i + 1) % messages.length;
+      statusEl.textContent = messages[i];
+    }, 2000);
+  </script>
 </body>
 </html>

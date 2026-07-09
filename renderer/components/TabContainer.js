@@ -2,13 +2,49 @@ import React from 'react';
 import Tab from './Tab';
 import PropTypes from 'prop-types';
 
-
-// Button click event handler for InMain and InExternal
 function handleHMRButtonClick(event, callback) {
   event.stopPropagation();
+  if (callback) callback();
+}
 
-  if (callback)
-    callback();
+class ToolbarButton extends React.PureComponent {
+  constructor(props) {
+    super(props);
+    this.state = { hovered: false, pressed: false };
+  }
+
+  render() {
+    const { onClick, icon, title } = this.props;
+    const { hovered, pressed } = this.state;
+
+    return (
+      <div
+        className="btn"
+        onClick={onClick}
+        title={title}
+        onMouseEnter={() => this.setState({ hovered: true })}
+        onMouseLeave={() => this.setState({ hovered: false, pressed: false })}
+        onMouseDown={() => this.setState({ pressed: true })}
+        onMouseUp={() => this.setState({ pressed: false })}
+        style={{
+          transform: pressed ? 'scale(0.85)' : hovered ? 'translateY(-2px)' : 'none',
+          background: hovered ? 'rgba(0, 240, 255, 0.1)' : 'transparent',
+          color: hovered ? '#00f0ff' : '#64748b',
+          boxShadow: hovered ? '0 2px 12px rgba(0, 240, 255, 0.2)' : 'none',
+          transition: 'all 150ms cubic-bezier(0.22, 1, 0.36, 1)',
+          width: '30px',
+          height: '30px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: '6px',
+          cursor: 'pointer',
+        }}
+      >
+        <i className={icon} />
+      </div>
+    );
+  }
 }
 
 const TabContainer = ({
@@ -21,16 +57,6 @@ const TabContainer = ({
   toggleTerminal,
 }) => {
   const tabs = [];
-  // for (var i = 0; i < appState.openTabs.length; i++) {
-  //   tabs.push(
-  //     <Tab 
-  //       key={i} 
-  //       name={appState.openTabs[i].name} 
-  //       setActiveTab={setActiveTab} 
-  //       id={appState.openTabs[i].id} 
-  //       closeTab={closeTab}
-  //     />);
-  // }
   for (let key in appState.openTabs) {
     tabs.push(
       <Tab
@@ -52,31 +78,36 @@ const TabContainer = ({
       </div>
       <div id="editor-tabbar-right">
         <div id="btn-hmr-group">
-        {/* {isClosed ? <i className="fas fa-lock"  onClick={close}/> : <i  onClick={close} className="fas fa-lock-open"/>}  */}
-        {/* <i onClick={close} className= {isClosed ? "fas fa-lock" : "fas fa-lock-open"} />  */}
-          <div id="btn-hmr-main" className="btn" onClick={close}>
-            <i className='fas fa-window-maximize fa-rotate-270'></i>
-          </div>
-
-          <div id="btn-hmr-main" className="btn" onClick={(event) => handleHMRButtonClick(event, cbOpenSimulator_Main)}>
-            <i className="fas fa-window-maximize" />
-          </div>
-          <div id="btn-hmr-ext" className="btn" onClick={(event) => handleHMRButtonClick(event, cbOpenSimulator_Ext)}>
-            <i className="fas fa-window-restore"/>
-          </div>
-          <div id="btn-hmr-main" className="btn" onClick={toggleTerminal}>
-            <i className='fas fa-window-maximize fa-rotate-180'></i>
-          </div>
+          <ToolbarButton
+            onClick={close}
+            icon="fas fa-window-maximize fa-rotate-270"
+            title="Toggle sidebar"
+          />
+          <ToolbarButton
+            onClick={(event) => handleHMRButtonClick(event, cbOpenSimulator_Main)}
+            icon="fas fa-window-maximize"
+            title="Open simulator inline"
+          />
+          <ToolbarButton
+            onClick={(event) => handleHMRButtonClick(event, cbOpenSimulator_Ext)}
+            icon="fas fa-window-restore"
+            title="Open simulator external"
+          />
+          <ToolbarButton
+            onClick={toggleTerminal}
+            icon="fas fa-window-maximize fa-rotate-180"
+            title="Toggle terminal"
+          />
         </div>
       </div>
     </div>
-  )
+  );
 };
 
 TabContainer.propTypes = {
   appState: PropTypes.object.isRequired,
   setActiveTab: PropTypes.func.isRequired,
-  closeTab: PropTypes.func.isRequired
-}
+  closeTab: PropTypes.func.isRequired,
+};
 
 export default TabContainer;

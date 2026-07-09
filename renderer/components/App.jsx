@@ -21,6 +21,61 @@ const { exec } = require('child_process');
 
 const importPathFunctions = require('../../importPath');
 
+class AiToggleButton extends React.PureComponent {
+  constructor(props) {
+    super(props);
+    this.state = { hovered: false, pressed: false };
+  }
+
+  render() {
+    const { aiChatOpen, onClick } = this.props;
+    const { hovered, pressed } = this.state;
+    return (
+      <button
+        onClick={onClick}
+        title="Toggle AI Chat"
+        onMouseEnter={() => this.setState({ hovered: true })}
+        onMouseLeave={() => this.setState({ hovered: false, pressed: false })}
+        onMouseDown={() => this.setState({ pressed: true })}
+        onMouseUp={() => this.setState({ pressed: false })}
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          width: '50px',
+          height: '50px',
+          borderRadius: '14px',
+          border: aiChatOpen ? '1px solid rgba(0, 240, 255, 0.4)' : '1px solid rgba(0, 240, 255, 0.15)',
+          background: aiChatOpen
+            ? 'linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(168, 85, 247, 0.15))'
+            : hovered
+              ? 'rgba(0, 240, 255, 0.1)'
+              : 'rgba(13, 19, 32, 0.9)',
+          color: aiChatOpen ? '#00f0ff' : hovered ? '#00f0ff' : '#64748b',
+          fontSize: '20px',
+          cursor: 'pointer',
+          boxShadow: hovered || aiChatOpen
+            ? '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.2)'
+            : '0 4px 16px rgba(0, 0, 0, 0.3)',
+          zIndex: 9998,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transform: pressed ? 'scale(0.9)' : hovered ? 'scale(1.08)' : 'scale(1)',
+          transition: 'all 200ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+          backdropFilter: 'blur(10px)',
+        }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
+          <line x1="10" y1="22" x2="14" y2="22"/>
+          <line x1="9" y1="17" x2="15" y2="17"/>
+        </svg>
+      </button>
+    );
+  }
+}
+
 export default class App extends React.Component {
   constructor() {
 
@@ -784,6 +839,7 @@ export default class App extends React.Component {
   }
 
   render() {
+    const aiOpen = this.state.aiChatOpen;
     return (
       <ride-workspace className="scrollbars-visible-always" onClick={this.closeOpenDialogs}>
         <ride-panel-container className="header" />
@@ -793,30 +849,7 @@ export default class App extends React.Component {
             {this.renderMainLayout()}
           </ride-pane-axis>
         </ride-pane-container>
-        <button
-          onClick={(e) => { e.stopPropagation(); this.toggleAiChat(); }}
-          title="Toggle AI Chat"
-          style={{
-            position: 'fixed',
-            bottom: '16px',
-            right: '16px',
-            width: '48px',
-            height: '48px',
-            borderRadius: '50%',
-            border: 'none',
-            background: this.state.aiChatOpen ? '#0e4a8e' : '#3a8fe0',
-            color: '#fff',
-            fontSize: '20px',
-            cursor: 'pointer',
-            boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
-            zIndex: 9998,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          🤖
-        </button>
+        <AiToggleButton aiChatOpen={aiOpen} onClick={(e) => { e.stopPropagation(); this.toggleAiChat(); }} />
       </ride-workspace>
     );
   }

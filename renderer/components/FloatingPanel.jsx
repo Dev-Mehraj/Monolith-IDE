@@ -4,19 +4,18 @@ class FloatingPanel extends Component {
   constructor(props) {
     super(props);
 
-    // Load saved position/size from localStorage or use defaults
     const savedState = this.loadSavedState();
 
     this.state = {
       position: savedState.position || { x: 20, y: 20 },
-      size: savedState.size || { width: 400, height: 500 },
+      size: savedState.size || { width: 420, height: 520 },
       isDragging: false,
       isResizing: false,
-      dragOffset: { x: 0, y: 0 }
+      dragOffset: { x: 0, y: 0 },
+      closeHovered: false,
     };
 
     this.panelRef = React.createRef();
-    this.dragStartPos = null;
     this.resizeStartSize = null;
     this.resizeStartPos = null;
 
@@ -29,45 +28,34 @@ class FloatingPanel extends Component {
   loadSavedState() {
     try {
       const saved = localStorage.getItem('ollama_panel_state');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch (e) {
-      console.error('Failed to load panel state:', e);
-    }
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
     return {};
   }
 
   saveState(position, size) {
     try {
       localStorage.setItem('ollama_panel_state', JSON.stringify({ position, size }));
-    } catch (e) {
-      console.error('Failed to save panel state:', e);
-    }
+    } catch (e) {}
   }
 
   handleMouseDown(e) {
-    // Only start dragging from the header
-    if (e.target.closest('.floating-panel-header')) {
+    if (e.target.closest('.floating-panel-header') && !e.target.closest('.fp-close-btn')) {
       const rect = this.panelRef.current.getBoundingClientRect();
       this.setState({
         isDragging: true,
-        dragOffset: {
-          x: e.clientX - rect.left,
-          y: e.clientY - rect.top
-        }
+        dragOffset: { x: e.clientX - rect.left, y: e.clientY - rect.top },
       });
       e.preventDefault();
     }
   }
 
   handleResizeMouseDown(e) {
-    // Only start resizing from the resize handle
     if (e.target.closest('.floating-panel-resize-handle')) {
       this.setState({
         isResizing: true,
         resizeStartSize: { ...this.state.size },
-        resizeStartPos: { x: e.clientX, y: e.clientY }
+        resizeStartPos: { x: e.clientX, y: e.clientY },
       });
       e.preventDefault();
       e.stopPropagation();
@@ -76,44 +64,33 @@ class FloatingPanel extends Component {
 
   handleMouseMove(e) {
     if (this.state.isDragging) {
-      const newX = e.clientX - this.state.dragOffset.x;
-      const newY = e.clientY - this.state.dragOffset.y;
-
       this.setState({
-        position: { x: Math.max(0, newX), y: Math.max(0, newY) }
+        position: {
+          x: Math.max(0, e.clientX - this.state.dragOffset.x),
+          y: Math.max(0, e.clientY - this.state.dragOffset.y),
+        },
       });
     }
-
     if (this.state.isResizing) {
-      const deltaX = e.clientX - this.state.resizeStartPos.x;
-      const deltaY = e.clientY - this.state.resizeStartPos.y;
-
-      const minWidth = this.props.minWidth || 300;
-      const minHeight = this.props.minHeight || 200;
-
-      const newWidth = Math.max(minWidth, this.state.resizeStartSize.width + deltaX);
-      const newHeight = Math.max(minHeight, this.state.resizeStartSize.height + deltaY);
-
+      const dx = e.clientX - this.state.resizeStartPos.x;
+      const dy = e.clientY - this.state.resizeStartPos.y;
       this.setState({
-        size: { width: newWidth, height: newHeight }
+        size: {
+          width: Math.max(this.props.minWidth || 300, this.state.resizeStartSize.width + dx),
+          height: Math.max(this.props.minHeight || 200, this.state.resizeStartSize.height + dy),
+        },
       });
     }
   }
 
   handleMouseUp() {
     if (this.state.isDragging || this.state.isResizing) {
-      // Save state when done dragging/resizing
       this.saveState(this.state.position, this.state.size);
     }
-
-    this.setState({
-      isDragging: false,
-      isResizing: false
-    });
+    this.setState({ isDragging: false, isResizing: false });
   }
 
   componentDidMount() {
-    // Add global mouse listeners
     document.addEventListener('mousemove', this.handleMouseMove);
     document.addEventListener('mouseup', this.handleMouseUp);
   }
@@ -124,7 +101,7 @@ class FloatingPanel extends Component {
   }
 
   render() {
-    const { position, size, isDragging, isResizing } = this.state;
+    const { position, size, isDragging, isResizing, closeHovered } = this.state;
     const { title, children, className } = this.props;
 
     return (
@@ -140,45 +117,49 @@ class FloatingPanel extends Component {
           zIndex: 9999,
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: '#1e1e1e',
-          border: '1px solid #333',
-          borderRadius: '8px',
-          boxShadow: isDragging || isResizing
-            ? '0 10px 40px rgba(0,0,0,0.5)'
-            : '0 4px 20px rgba(0,0,0,0.3)',
           overflow: 'hidden',
-          userSelect: isDragging || isResizing ? 'none' : 'auto'
+          userSelect: isDragging || isResizing ? 'none' : 'auto',
         }}
         onMouseDown={this.handleMouseDown}
       >
-        {/* Header */}
         <div
           className="floating-panel-header"
           style={{
-            padding: '8px 12px',
-            backgroundColor: '#2a2a2a',
-            borderBottom: '1px solid #333',
+            padding: '10px 14px',
             cursor: 'move',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            flexShrink: 0
+            flexShrink: 0,
           }}
         >
-          <span style={{ color: '#ccc', fontSize: '13px', fontWeight: '500' }}>
+          <span style={{
+            color: '#00f0ff',
+            fontSize: '11px',
+            fontWeight: '600',
+            letterSpacing: '1px',
+            textTransform: 'uppercase',
+            textShadow: '0 0 10px rgba(0, 240, 255, 0.3)',
+          }}>
             {title || 'AI Chat'}
           </span>
           {this.props.onClose && (
             <button
+              className="fp-close-btn"
               onClick={this.props.onClose}
+              onMouseEnter={() => this.setState({ closeHovered: true })}
+              onMouseLeave={() => this.setState({ closeHovered: false })}
               style={{
-                background: 'transparent',
+                background: closeHovered ? 'rgba(255, 45, 149, 0.15)' : 'transparent',
                 border: 'none',
-                color: '#888',
+                color: closeHovered ? '#ff2d95' : '#64748b',
                 cursor: 'pointer',
-                fontSize: '16px',
+                fontSize: '18px',
                 lineHeight: 1,
-                padding: '0 2px',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                transition: 'all 150ms ease',
+                transform: closeHovered ? 'scale(1.1)' : 'scale(1)',
               }}
               title="Close"
             >
@@ -187,20 +168,13 @@ class FloatingPanel extends Component {
           )}
         </div>
 
-        {/* Content */}
         <div
           className="floating-panel-content"
-          style={{
-            flex: 1,
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column'
-          }}
+          style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
         >
           {children}
         </div>
 
-        {/* Resize Handle */}
         <div
           className="floating-panel-resize-handle"
           style={{
@@ -210,25 +184,11 @@ class FloatingPanel extends Component {
             width: '20px',
             height: '20px',
             cursor: 'se-resize',
-            background: 'linear-gradient(135deg, transparent 50%, #555 50%)',
-            borderBottomRightRadius: '6px'
+            background: 'linear-gradient(135deg, transparent 50%, rgba(0, 240, 255, 0.2) 50%)',
+            borderBottomRightRadius: '10px',
           }}
           onMouseDown={this.handleResizeMouseDown}
         />
-
-        {/* CSS for the panel */}
-        <style>{`
-          .floating-panel {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          }
-          .floating-panel.dragging,
-          .floating-panel.resizing {
-            opacity: 0.9;
-          }
-          .floating-panel-header:hover {
-            background-color: #333 !important;
-          }
-        `}</style>
       </div>
     );
   }

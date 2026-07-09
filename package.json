@@ -14,7 +14,7 @@
     "build-and-start": "cross-env NODE_OPTIONS=--openssl-legacy-provider webpack --mode development && cross-env NODE_OPTIONS=--openssl-legacy-provider NODE_ENV=production electron .",
     "electron-packager": "electron-packager . --overwrite --platform=darwin --arch=x64 --icon=./icons/icon.png --prune=true --out=release-builds"
   },
-  "author": "Mark Cruz, Jin Choi, Bita Djaghouri, Pablo Lee, Ryan Yang, Oscar Chan, Juan Hart, Eric Pham, Rocky Liao, Khalid Umar",
+  "author": "Mehraj Hassan",
   "license": "ISC",
   "dependencies": {
     "@babel/core": "^7.1.2",
