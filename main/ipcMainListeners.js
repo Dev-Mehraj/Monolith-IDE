@@ -309,4 +309,77 @@ module.exports = () => {
   ipcMain.on('closeSim', (event, pid) => {
     closeSim(pid);
   });
+
+  // ---- Real PTY terminal (Git Bash via node-pty in a system-Node child process) ----
+  const { spawn: spawnChild } = require('child_process');
+  let ptyChild = null;
+
+  function sendToPty(msg) {
+    if (ptyChild && ptyChild.stdin.writable) {
+      ptyChild.stdin.write(JSON.stringify(msg) + '\n');
+    }
+  }
+
+  function killPtyChild() {
+    if (ptyChild) {
+      try { ptyChild.kill(); } catch (e) { /* ignore */ }
+      ptyChild = null;
+    }
+  }
+
+  ipcMain.on('terminal-spawn', (event, { cwd, cols, rows }) => {
+    killPtyChild();
+
+    // Spawn ptyHost.js under the SYSTEM node so node-pty's native bindings
+    // (compiled against the system Node ABI) load correctly.
+    const hostScript = path.join(__dirname, 'ptyHost.js');
+    ptyChild = spawnChild('node', [hostScript], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: process.env,
+    });
+
+    // Forward PTY data to the renderer
+    let dataBuf = '';
+    ptyChild.stdout.on('data', (chunk) => {
+      dataBuf += chunk.toString();
+      let idx;
+      while ((idx = dataBuf.indexOf('\n')) !== -1) {
+        const line = dataBuf.slice(0, idx).trim();
+        dataBuf = dataBuf.slice(idx + 1);
+        if (!line) continue;
+        try {
+          const msg = JSON.parse(line);
+          if (msg.type === 'data') {
+            event.sender.send('terminal-data', msg.data);
+          } else if (msg.type === 'exit') {
+            event.sender.send('terminal-exit', msg.exitCode);
+          }
+        } catch (e) { /* skip */ }
+      }
+    });
+
+    ptyChild.stderr.on('data', (chunk) => {
+      console.error('[ptyHost stderr]', chunk.toString());
+    });
+
+    ptyChild.on('close', () => {
+      ptyChild = null;
+    });
+
+    // Tell the host to spawn the shell
+    sendToPty({ type: 'spawn', cwd: cwd, cols: cols, rows: rows });
+  });
+
+  ipcMain.on('terminal-input', (event, data) => {
+    sendToPty({ type: 'input', data: data });
+  });
+
+  ipcMain.on('terminal-resize', (event, { cols, rows }) => {
+    sendToPty({ type: 'resize', cols: cols, rows: rows });
+  });
+
+  ipcMain.on('terminal-kill', () => {
+    sendToPty({ type: 'kill' });
+    killPtyChild();
+  });
 };

@@ -13,7 +13,7 @@ const SLASH_COMMANDS = {
 };
 
 const STORAGE_KEY = 'monolith_chat_history';
-const SYSTEM_PROMPT_KEY = 'monolith_system_prompt';
+const SYSTEM_PROMPT = 'You are an expert AI software designer. You must help with writing code and short explanations, with more focus on code. You are running INSIDE an IDE named Monolith.';
 
 export default class AiChatPanel extends React.Component {
   constructor(props) {
@@ -24,8 +24,6 @@ export default class AiChatPanel extends React.Component {
       messages: [],
       inputValue: '',
       isLoading: false,
-      showSystemPrompt: false,
-      systemPrompt: '',
       temperature: 0.7,
       isNearBottom: true,
     };
@@ -49,7 +47,6 @@ export default class AiChatPanel extends React.Component {
     this.handleSend = this.handleSend.bind(this);
     this.handleModelChange = this.handleModelChange.bind(this);
     this.handleTemperatureChange = this.handleTemperatureChange.bind(this);
-    this.handleSystemPromptChange = this.handleSystemPromptChange.bind(this);
     this.handleClearChat = this.handleClearChat.bind(this);
     this.handleStop = this.handleStop.bind(this);
     this.handleScroll = this.handleScroll.bind(this);
@@ -69,11 +66,6 @@ export default class AiChatPanel extends React.Component {
     ipcRenderer.on('ollama-tool-request', this.handleToolRequest);
     ipcRenderer.on('ollama-tool-result', this.handleToolResult);
     ipcRenderer.send('ollama-list-models');
-
-    var savedSystemPrompt = localStorage.getItem(SYSTEM_PROMPT_KEY);
-    if (savedSystemPrompt) {
-      this.setState({ systemPrompt: savedSystemPrompt });
-    }
 
     this.loadHistory();
   }
@@ -259,7 +251,7 @@ export default class AiChatPanel extends React.Component {
     var inputValue = state.inputValue;
     var selectedModel = state.selectedModel;
     var messages = state.messages;
-    var systemPrompt = state.systemPrompt;
+    var systemPrompt = SYSTEM_PROMPT;
     var temperature = state.temperature;
     var isLoading = state.isLoading;
 
@@ -298,7 +290,7 @@ export default class AiChatPanel extends React.Component {
       ipcRenderer.send('ollama-chat', {
         model: selectedModel,
         messages: newMessages.filter(function (m) { return m.role === 'user' || m.role === 'assistant'; }),
-        systemPrompt: systemPrompt || undefined,
+        systemPrompt: systemPrompt,
         temperature: temperature,
         supportsTools: !!(selectedModelInfo && selectedModelInfo.supportsTools),
         projectRoot: self.props.rootDirPath || '',
@@ -408,61 +400,6 @@ export default class AiChatPanel extends React.Component {
             </optgroup>
           )}
         </select>
-      </div>
-    );
-  }
-
-  renderSystemPromptEditor() {
-    var showSystemPrompt = this.state.showSystemPrompt;
-    var systemPrompt = this.state.systemPrompt;
-    var self = this;
-
-    return (
-      <div style={{ borderBottom: '1px solid rgba(0, 240, 255, 0.08)' }}>
-        <button
-          onClick={function () { self.setState({ showSystemPrompt: !showSystemPrompt }); }}
-          style={{
-            width: '100%',
-            padding: '5px 12px',
-            background: 'transparent',
-            border: 'none',
-            color: '#64748b',
-            cursor: 'pointer',
-            fontSize: '11px',
-            textAlign: 'left',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            fontFamily: 'inherit',
-            transition: 'color 150ms',
-          }}
-          onMouseEnter={function(e) { e.target.style.color = '#00f0ff'; }}
-          onMouseLeave={function(e) { e.target.style.color = '#64748b'; }}
-        >
-          <span style={{ transition: 'transform 200ms', display: 'inline-block', transform: showSystemPrompt ? 'rotate(0)' : 'rotate(-90deg)' }}>▼</span>
-          System Prompt
-        </button>
-        {showSystemPrompt && (
-          <textarea
-            value={systemPrompt}
-            onChange={this.handleSystemPromptChange}
-            placeholder="Enter a system prompt..."
-            rows={3}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              background: '#050a12',
-              color: '#94a3b8',
-              border: 'none',
-              borderTop: '1px solid rgba(0, 240, 255, 0.08)',
-              fontSize: '11px',
-              resize: 'vertical',
-              outline: 'none',
-              fontFamily: 'inherit',
-              boxSizing: 'border-box',
-            }}
-          />
-        )}
       </div>
     );
   }
@@ -935,7 +872,6 @@ export default class AiChatPanel extends React.Component {
         }}
       >
         {this.renderModelSelector()}
-        {this.renderSystemPromptEditor()}
         {this.renderTemperatureSlider()}
         {this.renderMessages()}
         {this.renderInputBar()}

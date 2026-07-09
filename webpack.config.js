@@ -11,6 +11,10 @@ module.exports = {
   },
   // Compile for Electron for main process.
   target: 'electron-main',
+  // Native modules that must be resolved at runtime, not bundled
+  externals: {
+    'node-pty': 'commonjs node-pty',
+  },
   // configure whether to polyfill or mock certain Node.js globals
   resolve: {
     extensions: ['.js', '.jsx', '.json'],
