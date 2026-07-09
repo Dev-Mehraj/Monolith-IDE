@@ -21,6 +21,7 @@ const TextEditorPane = ({ appState, setActiveTab, closeTab, onEditorValueChange,
           <TextEditor
             path={appState.previousPaths[appState.previousPaths.length - 1]}
             onValueChange={onEditorValueChange}
+            externalChangeSignal={appState.externalChangeSignal}
           />
         </React.Fragment>
       }

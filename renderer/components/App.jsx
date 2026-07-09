@@ -57,6 +57,7 @@ export default class App extends React.Component {
       closed: false,
       toggleTerminal: false,
       aiChatOpen: false,
+      externalChangeSignal: 0,
     };
 
     this.fileTreeInit();
@@ -129,6 +130,21 @@ export default class App extends React.Component {
     ipcRenderer.on('closeSim', (event, arg) => {
       this.setState({ url: ' ' })
     })
+
+    // Keep an already-open tab in sync when the AI panel writes/edits that file on disk.
+    ipcRenderer.on('ai-tool-file-changed', (event, data) => {
+      const changedPath = data.path;
+      if (!Object.keys(this.state.openTabs).includes(changedPath)) return;
+
+      const copyOpenTabs = Object.assign({}, this.state.openTabs);
+      copyOpenTabs[changedPath] = Object.assign({}, copyOpenTabs[changedPath], { editorValue: data.content });
+
+      const isActiveTab = this.state.previousPaths[this.state.previousPaths.length - 1] === changedPath;
+      this.setState({
+        openTabs: copyOpenTabs,
+        externalChangeSignal: isActiveTab ? this.state.externalChangeSignal + 1 : this.state.externalChangeSignal,
+      });
+    });
   }
   /**
    * Creates component Tree object for rendering by calling on methods defined in importPath.js
@@ -685,6 +701,7 @@ export default class App extends React.Component {
           <FloatingPanel title="AI Chat" minWidth={360} minHeight={420} onClose={this.toggleAiChat}>
             <AiChatPanel
               activeFilePath={this.state.previousPaths[this.state.previousPaths.length - 1] || ''}
+              rootDirPath={this.state.rootDirPath}
             />
           </FloatingPanel>
         )}

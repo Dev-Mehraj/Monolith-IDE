@@ -205,27 +205,16 @@ export default class TextEditor extends React.PureComponent {
   }
 
   componentDidUpdate(prevProps) {
-    const { path/*, ...rest*/ } = this.props;
-
-    //this._editor.updateOptions(rest); * TODO - Ryan
+    const { path, externalChangeSignal } = this.props;
 
     if (path !== prevProps.path) {
       this.editorStates.set(prevProps.path, this.editor.saveViewState());
       this._openFile(path);
     }
-    else {
-      const model = this.editor.getModel();
-      if (value !== model.getValue()) {
-        model.pushEditOperations(
-          [],
-          [
-            {
-              range: model.getFullModelRange(),
-              text: value,
-            }
-          ]
-        );
-      }
+    // Re-read from disk when a tool (e.g. the AI panel) modified the currently
+    // open file outside the editor, preserving the undo stack via _initializeFile.
+    else if (externalChangeSignal !== prevProps.externalChangeSignal) {
+      this._initializeFile(path);
     }
   }
 

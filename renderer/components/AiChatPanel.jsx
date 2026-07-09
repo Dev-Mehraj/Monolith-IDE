@@ -36,8 +36,14 @@ export default class AiChatPanel extends React.Component {
 
     this.handleModelsList = this.handleModelsList.bind(this);
     this.handleChunk = this.handleChunk.bind(this);
+    this.handleThinkingChunk = this.handleThinkingChunk.bind(this);
+    this.handleToggleThinking = this.handleToggleThinking.bind(this);
     this.handleDone = this.handleDone.bind(this);
     this.handleError = this.handleError.bind(this);
+    this.handleToolAuto = this.handleToolAuto.bind(this);
+    this.handleToolRequest = this.handleToolRequest.bind(this);
+    this.handleToolResult = this.handleToolResult.bind(this);
+    this.handleApprove = this.handleApprove.bind(this);
     this.handleInputChange = this.handleInputChange.bind(this);
     this.handleInputKeyDown = this.handleInputKeyDown.bind(this);
     this.handleSend = this.handleSend.bind(this);
@@ -56,8 +62,12 @@ export default class AiChatPanel extends React.Component {
   componentDidMount() {
     ipcRenderer.on('ollama-models-list', this.handleModelsList);
     ipcRenderer.on('ollama-chat-chunk', this.handleChunk);
+    ipcRenderer.on('ollama-chat-thinking', this.handleThinkingChunk);
     ipcRenderer.on('ollama-chat-done', this.handleDone);
     ipcRenderer.on('ollama-chat-error', this.handleError);
+    ipcRenderer.on('ollama-tool-auto', this.handleToolAuto);
+    ipcRenderer.on('ollama-tool-request', this.handleToolRequest);
+    ipcRenderer.on('ollama-tool-result', this.handleToolResult);
     ipcRenderer.send('ollama-list-models');
 
     var savedSystemPrompt = localStorage.getItem(SYSTEM_PROMPT_KEY);
@@ -71,8 +81,12 @@ export default class AiChatPanel extends React.Component {
   componentWillUnmount() {
     ipcRenderer.removeListener('ollama-models-list', this.handleModelsList);
     ipcRenderer.removeListener('ollama-chat-chunk', this.handleChunk);
+    ipcRenderer.removeListener('ollama-chat-thinking', this.handleThinkingChunk);
     ipcRenderer.removeListener('ollama-chat-done', this.handleDone);
     ipcRenderer.removeListener('ollama-chat-error', this.handleError);
+    ipcRenderer.removeListener('ollama-tool-auto', this.handleToolAuto);
+    ipcRenderer.removeListener('ollama-tool-request', this.handleToolRequest);
+    ipcRenderer.removeListener('ollama-tool-result', this.handleToolResult);
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -100,6 +114,27 @@ export default class AiChatPanel extends React.Component {
         lastMsg.content += chunk;
       }
       return { messages: messages, isLoading: true };
+    });
+  }
+
+  handleThinkingChunk(event, chunk) {
+    this.setState(function (prevState) {
+      var messages = prevState.messages.slice();
+      var lastMsg = messages[messages.length - 1];
+      if (lastMsg && lastMsg.role === 'assistant') {
+        lastMsg.thinking = (lastMsg.thinking || '') + chunk;
+        if (lastMsg.thinkingExpanded === undefined) lastMsg.thinkingExpanded = true;
+      }
+      return { messages: messages, isLoading: true };
+    });
+  }
+
+  handleToggleThinking(index) {
+    this.setState(function (prevState) {
+      var messages = prevState.messages.slice();
+      var msg = messages[index];
+      if (msg) msg.thinkingExpanded = !msg.thinkingExpanded;
+      return { messages: messages };
     });
   }
 
@@ -132,6 +167,66 @@ export default class AiChatPanel extends React.Component {
       };
     }, function () {
       self.saveHistory();
+    });
+  }
+
+  handleToolAuto(event, data) {
+    var self = this;
+    this.setState(function (prevState) {
+      var messages = prevState.messages.concat([
+        { role: 'tool', id: data.id, name: data.name, args: data.arguments, executionStatus: 'running' },
+        { role: 'assistant', content: '' },
+      ]);
+      return { messages: messages };
+    }, function () {
+      self.saveHistory();
+    });
+  }
+
+  handleToolRequest(event, data) {
+    var self = this;
+    this.setState(function (prevState) {
+      var messages = prevState.messages.concat([
+        { role: 'tool-approval', id: data.id, name: data.name, args: data.arguments, preview: data.preview, approvalStatus: 'pending', executionStatus: 'idle' },
+        { role: 'assistant', content: '' },
+      ]);
+      return { messages: messages };
+    }, function () {
+      self.saveHistory();
+    });
+  }
+
+  handleToolResult(event, data) {
+    var self = this;
+    this.setState(function (prevState) {
+      var messages = prevState.messages.slice();
+      var msg = messages.find(function (m) { return m.id === data.id; });
+      if (msg) {
+        msg.executionStatus = data.ok ? 'done' : 'error';
+        msg.result = data.result;
+        msg.error = data.error;
+        if (msg.role === 'tool-approval' && msg.approvalStatus === 'pending') {
+          msg.approvalStatus = data.ok ? 'approved' : 'denied';
+        }
+      }
+      return { messages: messages };
+    }, function () {
+      self.saveHistory();
+    });
+  }
+
+  handleApprove(id, approved) {
+    var self = this;
+    this.setState(function (prevState) {
+      var messages = prevState.messages.slice();
+      var msg = messages.find(function (m) { return m.id === id; });
+      if (msg) {
+        msg.approvalStatus = approved ? 'approved' : 'denied';
+        msg.executionStatus = approved ? 'running' : 'done';
+      }
+      return { messages: messages };
+    }, function () {
+      ipcRenderer.send('ollama-tool-response-' + id, { approved: approved });
     });
   }
 
@@ -197,13 +292,16 @@ export default class AiChatPanel extends React.Component {
 
     var newMessages = messages.concat([{ role: 'user', content: content }]);
     var displayMessages = newMessages.concat([{ role: 'assistant', content: '' }]);
+    var selectedModelInfo = state.models.find(function (m) { return m.name === selectedModel; });
     var self = this;
     this.setState({ messages: displayMessages, inputValue: '', isLoading: true }, function () {
       ipcRenderer.send('ollama-chat', {
         model: selectedModel,
-        messages: newMessages,
+        messages: newMessages.filter(function (m) { return m.role === 'user' || m.role === 'assistant'; }),
         systemPrompt: systemPrompt || undefined,
         temperature: temperature,
+        supportsTools: !!(selectedModelInfo && selectedModelInfo.supportsTools),
+        projectRoot: self.props.rootDirPath || '',
       });
     });
   }
@@ -297,14 +395,14 @@ export default class AiChatPanel extends React.Component {
           {localModels.length > 0 && (
             <optgroup label="Local Models">
               {localModels.map(function (m) {
-                return <option key={m.name} value={m.name}>{m.name}</option>;
+                return <option key={m.name} value={m.name}>{m.name + (m.supportsTools ? ' 🔧' : '')}</option>;
               })}
             </optgroup>
           )}
           {cloudModels.length > 0 && (
             <optgroup label="Cloud Models">
               {cloudModels.map(function (m) {
-                return <option key={m.name} value={m.name}>{m.name}</option>;
+                return <option key={m.name} value={m.name}>{m.name + (m.supportsTools ? ' 🔧' : '')}</option>;
               })}
             </optgroup>
           )}
@@ -393,9 +491,123 @@ export default class AiChatPanel extends React.Component {
     );
   }
 
+  renderToolCard(msg, i) {
+    var statusIcon = msg.executionStatus === 'running' ? '⏳' : msg.executionStatus === 'error' ? '⚠️' : '✅';
+    var argsSummary = msg.args ? JSON.stringify(msg.args) : '';
+    var resultSummary = msg.executionStatus === 'error'
+      ? msg.error
+      : msg.result ? JSON.stringify(msg.result).slice(0, 500) : '';
+
+    return (
+      <div
+        key={i}
+        style={{
+          marginBottom: '12px',
+          padding: '8px 10px',
+          borderRadius: '6px',
+          background: '#232a23',
+          borderLeft: '3px solid #6a9955',
+          fontSize: '12px',
+        }}
+      >
+        <div style={{ color: '#9fd39f', fontWeight: '600' }}>
+          {statusIcon + ' ' + msg.name + '(' + argsSummary + ')'}
+        </div>
+        {resultSummary && (
+          <div style={{ color: '#999', marginTop: '4px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {resultSummary}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  renderApprovalCard(msg, i) {
+    var self = this;
+    var statusLabel = {
+      pending: 'Waiting for approval',
+      approved: msg.executionStatus === 'running' ? 'Running...' : msg.executionStatus === 'error' ? 'Failed' : 'Approved',
+      denied: 'Denied',
+    }[msg.approvalStatus];
+
+    return (
+      <div
+        key={i}
+        style={{
+          marginBottom: '12px',
+          padding: '8px 10px',
+          borderRadius: '6px',
+          background: '#2a2620',
+          borderLeft: '3px solid #d9a34a',
+          fontSize: '12px',
+        }}
+      >
+        <div style={{ color: '#e0b86a', fontWeight: '600', marginBottom: '6px' }}>
+          {'🔧 ' + msg.name + ' — requires approval'}
+        </div>
+        <pre
+          style={{
+            margin: 0,
+            padding: '6px',
+            background: '#1a1a1a',
+            borderRadius: '4px',
+            color: '#ccc',
+            fontSize: '11px',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            maxHeight: '160px',
+            overflowY: 'auto',
+          }}
+        >
+          {msg.preview}
+        </pre>
+        {msg.approvalStatus === 'pending' ? (
+          <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+            <button
+              onClick={function () { self.handleApprove(msg.id, true); }}
+              style={{ padding: '4px 10px', background: '#3a8fe0', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
+            >
+              Approve
+            </button>
+            <button
+              onClick={function () { self.handleApprove(msg.id, false); }}
+              style={{ padding: '4px 10px', background: '#444', color: '#ccc', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
+            >
+              Deny
+            </button>
+          </div>
+        ) : (
+          <div style={{ color: '#888', marginTop: '6px' }}>{statusLabel}</div>
+        )}
+        {msg.executionStatus === 'error' && msg.error && (
+          <div style={{ color: '#c66', marginTop: '4px' }}>{msg.error}</div>
+        )}
+        {msg.executionStatus === 'done' && msg.result && (
+          <pre
+            style={{
+              margin: '6px 0 0',
+              padding: '6px',
+              background: '#1a1a1a',
+              borderRadius: '4px',
+              color: '#999',
+              fontSize: '11px',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              maxHeight: '160px',
+              overflowY: 'auto',
+            }}
+          >
+            {JSON.stringify(msg.result).slice(0, 800)}
+          </pre>
+        )}
+      </div>
+    );
+  }
+
   renderMessages() {
     var messages = this.state.messages;
     var isLoading = this.state.isLoading;
+    var self = this;
 
     return (
       <div
@@ -424,6 +636,16 @@ export default class AiChatPanel extends React.Component {
           </div>
         )}
         {messages.map(function (msg, i) {
+          if (msg.role === 'tool') {
+            return self.renderToolCard(msg, i);
+          }
+          if (msg.role === 'tool-approval') {
+            return self.renderApprovalCard(msg, i);
+          }
+          var hasThinking = msg.role === 'assistant' && msg.thinking && msg.thinking.trim();
+          if (msg.role === 'assistant' && !msg.content.trim() && !hasThinking) {
+            return null;
+          }
           return (
             <div
               key={i}
@@ -447,17 +669,57 @@ export default class AiChatPanel extends React.Component {
               >
                 {msg.role === 'user' ? 'You' : 'AI'}
               </div>
-              <div
-                style={{
-                  color: '#e0e0e0',
-                  fontSize: '13px',
-                  lineHeight: '1.5',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}
-              >
-                {msg.content}
-              </div>
+              {hasThinking && (
+                <div style={{ marginBottom: msg.content.trim() ? '6px' : '0' }}>
+                  <button
+                    onClick={function () { self.handleToggleThinking(i); }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#888',
+                      cursor: 'pointer',
+                      fontSize: '11px',
+                      padding: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <span>{msg.thinkingExpanded ? '▼' : '▶'}</span>
+                    <span>{'💭 Thinking'}</span>
+                  </button>
+                  {msg.thinkingExpanded && (
+                    <div
+                      style={{
+                        color: '#888',
+                        fontSize: '12px',
+                        fontStyle: 'italic',
+                        lineHeight: '1.4',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        marginTop: '4px',
+                        paddingLeft: '4px',
+                        borderLeft: '2px solid #444',
+                      }}
+                    >
+                      {msg.thinking}
+                    </div>
+                  )}
+                </div>
+              )}
+              {msg.content.trim() && (
+                <div
+                  style={{
+                    color: '#e0e0e0',
+                    fontSize: '13px',
+                    lineHeight: '1.5',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {msg.content}
+                </div>
+              )}
             </div>
           );
         })}
