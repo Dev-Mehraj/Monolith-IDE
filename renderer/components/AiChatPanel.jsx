@@ -26,7 +26,13 @@ export default class AiChatPanel extends React.Component {
       isLoading: false,
       temperature: 0.7,
       isNearBottom: true,
+      geminiApiKeyPrompt: false,
+      geminiKeyInput: '',
+      geminiError: null,
+      geminiSavingKey: false,
     };
+
+    this._geminiApiKey = null;
 
     this.messagesEndRef = React.createRef();
     this.messagesContainerRef = React.createRef();
@@ -54,18 +60,34 @@ export default class AiChatPanel extends React.Component {
     this.loadHistory = this.loadHistory.bind(this);
     this.saveHistory = this.saveHistory.bind(this);
     this.insertActiveFileContext = this.insertActiveFileContext.bind(this);
+    this.handleGeminiModelsList = this.handleGeminiModelsList.bind(this);
+    this.handleGeminiKeyResponse = this.handleGeminiKeyResponse.bind(this);
+    this.handleGeminiSetKeyResponse = this.handleGeminiSetKeyResponse.bind(this);
+    this.handleSaveGeminiKey = this.handleSaveGeminiKey.bind(this);
+    this.handleDismissGeminiPrompt = this.handleDismissGeminiPrompt.bind(this);
   }
 
   componentDidMount() {
     ipcRenderer.on('ollama-models-list', this.handleModelsList);
     ipcRenderer.on('ollama-chat-chunk', this.handleChunk);
+    ipcRenderer.on('gemini-chat-chunk', this.handleChunk);
     ipcRenderer.on('ollama-chat-thinking', this.handleThinkingChunk);
+    ipcRenderer.on('gemini-chat-thinking', this.handleThinkingChunk);
     ipcRenderer.on('ollama-chat-done', this.handleDone);
+    ipcRenderer.on('gemini-chat-done', this.handleDone);
     ipcRenderer.on('ollama-chat-error', this.handleError);
+    ipcRenderer.on('gemini-chat-error', this.handleError);
     ipcRenderer.on('ollama-tool-auto', this.handleToolAuto);
+    ipcRenderer.on('gemini-tool-auto', this.handleToolAuto);
     ipcRenderer.on('ollama-tool-request', this.handleToolRequest);
+    ipcRenderer.on('gemini-tool-request', this.handleToolRequest);
     ipcRenderer.on('ollama-tool-result', this.handleToolResult);
+    ipcRenderer.on('gemini-tool-result', this.handleToolResult);
+    ipcRenderer.on('gemini-models-list', this.handleGeminiModelsList);
+    ipcRenderer.on('gemini-get-key-response', this.handleGeminiKeyResponse);
+    ipcRenderer.on('gemini-set-key-response', this.handleGeminiSetKeyResponse);
     ipcRenderer.send('ollama-list-models');
+    ipcRenderer.send('gemini-get-key');
 
     this.loadHistory();
   }
@@ -73,12 +95,22 @@ export default class AiChatPanel extends React.Component {
   componentWillUnmount() {
     ipcRenderer.removeListener('ollama-models-list', this.handleModelsList);
     ipcRenderer.removeListener('ollama-chat-chunk', this.handleChunk);
+    ipcRenderer.removeListener('gemini-chat-chunk', this.handleChunk);
     ipcRenderer.removeListener('ollama-chat-thinking', this.handleThinkingChunk);
+    ipcRenderer.removeListener('gemini-chat-thinking', this.handleThinkingChunk);
     ipcRenderer.removeListener('ollama-chat-done', this.handleDone);
+    ipcRenderer.removeListener('gemini-chat-done', this.handleDone);
     ipcRenderer.removeListener('ollama-chat-error', this.handleError);
+    ipcRenderer.removeListener('gemini-chat-error', this.handleError);
     ipcRenderer.removeListener('ollama-tool-auto', this.handleToolAuto);
+    ipcRenderer.removeListener('gemini-tool-auto', this.handleToolAuto);
     ipcRenderer.removeListener('ollama-tool-request', this.handleToolRequest);
+    ipcRenderer.removeListener('gemini-tool-request', this.handleToolRequest);
     ipcRenderer.removeListener('ollama-tool-result', this.handleToolResult);
+    ipcRenderer.removeListener('gemini-tool-result', this.handleToolResult);
+    ipcRenderer.removeListener('gemini-models-list', this.handleGeminiModelsList);
+    ipcRenderer.removeListener('gemini-get-key-response', this.handleGeminiKeyResponse);
+    ipcRenderer.removeListener('gemini-set-key-response', this.handleGeminiSetKeyResponse);
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -218,8 +250,50 @@ export default class AiChatPanel extends React.Component {
       }
       return { messages: messages };
     }, function () {
-      ipcRenderer.send('ollama-tool-response-' + id, { approved: approved });
+      var msg = self.state.messages.find(function (m) { return m.id === id; });
+      var prefix = (msg && msg.provider === 'gemini') ? 'gemini' : 'ollama';
+      ipcRenderer.send(prefix + '-tool-response-' + id, { approved: approved });
     });
+  }
+
+  handleGeminiModelsList(event, data) {
+    var self = this;
+    if (data.error) {
+      self.setState({ geminiError: data.error, geminiApiKeyPrompt: data.error === 'invalidKey' });
+      return;
+    }
+    self.setState(function (prevState) {
+      var existing = prevState.models.filter(function (m) { return m.provider !== 'gemini'; });
+      return { models: existing.concat(data.models || []), geminiError: null, geminiApiKeyPrompt: false };
+    });
+  }
+
+  handleGeminiKeyResponse(event, data) {
+    if (data.key) {
+      this._geminiApiKey = data.key;
+      ipcRenderer.send('gemini-list-models', { apiKey: data.key });
+    } else {
+      this.setState({ geminiApiKeyPrompt: true });
+    }
+  }
+
+  handleGeminiSetKeyResponse(event, data) {
+    if (data.success) {
+      ipcRenderer.send('gemini-list-models', { apiKey: this._geminiApiKey });
+      this.setState({ geminiSavingKey: false, geminiError: null });
+    }
+  }
+
+  handleSaveGeminiKey() {
+    var key = this.state.geminiKeyInput;
+    if (!key.trim()) return;
+    this._geminiApiKey = key.trim();
+    this.setState({ geminiSavingKey: true, geminiKeyInput: '' });
+    ipcRenderer.send('gemini-set-key', { apiKey: this._geminiApiKey });
+  }
+
+  handleDismissGeminiPrompt() {
+    this.setState({ geminiApiKeyPrompt: false });
   }
 
   handleModelChange(e) {
@@ -228,11 +302,6 @@ export default class AiChatPanel extends React.Component {
 
   handleTemperatureChange(e) {
     this.setState({ temperature: parseFloat(e.target.value) });
-  }
-
-  handleSystemPromptChange(e) {
-    this.setState({ systemPrompt: e.target.value });
-    localStorage.setItem(SYSTEM_PROMPT_KEY, e.target.value);
   }
 
   handleInputChange(e) {
@@ -285,16 +354,23 @@ export default class AiChatPanel extends React.Component {
     var newMessages = messages.concat([{ role: 'user', content: content }]);
     var displayMessages = newMessages.concat([{ role: 'assistant', content: '' }]);
     var selectedModelInfo = state.models.find(function (m) { return m.name === selectedModel; });
+    var isGemini = selectedModelInfo && selectedModelInfo.provider === 'gemini';
     var self = this;
     this.setState({ messages: displayMessages, inputValue: '', isLoading: true }, function () {
-      ipcRenderer.send('ollama-chat', {
+      var payload = {
         model: selectedModel,
         messages: newMessages.filter(function (m) { return m.role === 'user' || m.role === 'assistant'; }),
         systemPrompt: systemPrompt,
         temperature: temperature,
-        supportsTools: !!(selectedModelInfo && selectedModelInfo.supportsTools),
         projectRoot: self.props.rootDirPath || '',
-      });
+      };
+      if (isGemini) {
+        payload.apiKey = self._geminiApiKey;
+        ipcRenderer.send('gemini-chat', payload);
+      } else {
+        payload.supportsTools = !!(selectedModelInfo && selectedModelInfo.supportsTools);
+        ipcRenderer.send('ollama-chat', payload);
+      }
     });
   }
 
@@ -358,6 +434,130 @@ export default class AiChatPanel extends React.Component {
         this.inputRef.current.focus();
       }
     }
+  }
+
+  renderGeminiPrompt() {
+    var geminiKeyInput = this.state.geminiKeyInput;
+    var geminiSavingKey = this.state.geminiSavingKey;
+    var self = this;
+
+    return (
+      <div
+        style={{
+          padding: '16px 12px',
+          borderBottom: '1px solid rgba(0, 240, 255, 0.08)',
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ color: '#64748b', fontSize: '11px', marginBottom: '10px', letterSpacing: '0.5px' }}>
+          ENTER GEMINI API KEY
+        </div>
+        <input
+          type="password"
+          value={geminiKeyInput}
+          onChange={function (e) { self.setState({ geminiKeyInput: e.target.value }); }}
+          placeholder="Paste your Gemini API key..."
+          style={{
+            width: '100%',
+            padding: '8px 10px',
+            background: '#050a12',
+            color: '#e2e8f0',
+            border: '1px solid rgba(0, 240, 255, 0.15)',
+            borderRadius: '6px',
+            fontSize: '12px',
+            outline: 'none',
+            fontFamily: 'inherit',
+            boxSizing: 'border-box',
+            marginBottom: '8px',
+          }}
+        />
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+          <button
+            onClick={this.handleSaveGeminiKey}
+            disabled={!geminiKeyInput.trim() || geminiSavingKey}
+            style={{
+              padding: '6px 16px',
+              background: geminiKeyInput.trim() && !geminiSavingKey
+                ? 'linear-gradient(135deg, rgba(0, 128, 255, 0.3), rgba(0, 240, 255, 0.2))'
+                : 'rgba(30, 41, 59, 0.5)',
+              color: geminiKeyInput.trim() && !geminiSavingKey ? '#00f0ff' : '#2a3550',
+              border: geminiKeyInput.trim() && !geminiSavingKey ? '1px solid rgba(0, 240, 255, 0.3)' : '1px solid transparent',
+              borderRadius: '6px',
+              cursor: geminiKeyInput.trim() && !geminiSavingKey ? 'pointer' : 'default',
+              fontSize: '11px',
+              fontWeight: '600',
+              letterSpacing: '0.5px',
+              fontFamily: 'inherit',
+            }}
+          >
+            {geminiSavingKey ? 'SAVING...' : 'SAVE'}
+          </button>
+          <button
+            onClick={this.handleDismissGeminiPrompt}
+            style={{
+              padding: '6px 16px',
+              background: 'transparent',
+              color: '#64748b',
+              border: '1px solid rgba(0, 240, 255, 0.08)',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '11px',
+              fontWeight: '600',
+              fontFamily: 'inherit',
+            }}
+          >
+            SKIP
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  renderGeminiErrorBanner() {
+    var geminiError = this.state.geminiError;
+    var self = this;
+
+    if (!geminiError) return null;
+
+    var messages = {
+      invalidKey: 'Gemini: check your API key',
+      quotaExceeded: 'Gemini: quota exceeded',
+    };
+
+    return (
+      <div
+        style={{
+          padding: '6px 12px',
+          borderBottom: '1px solid rgba(255, 45, 149, 0.15)',
+          background: 'rgba(255, 45, 149, 0.04)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+        }}
+      >
+        <span style={{ color: '#ff2d95', fontSize: '11px' }}>
+          {messages[geminiError] || 'Gemini: check your API key'}
+        </span>
+        <button
+          onClick={function () { self.setState({ geminiApiKeyPrompt: true, geminiError: null }); }}
+          style={{
+            padding: '3px 10px',
+            background: 'rgba(255, 45, 149, 0.1)',
+            color: '#ff2d95',
+            border: '1px solid rgba(255, 45, 149, 0.2)',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '10px',
+            fontWeight: '600',
+            fontFamily: 'inherit',
+            flexShrink: 0,
+          }}
+        >
+          UPDATE KEY
+        </button>
+      </div>
+    );
   }
 
   renderModelSelector() {
@@ -873,6 +1073,8 @@ export default class AiChatPanel extends React.Component {
       >
         {this.renderModelSelector()}
         {this.renderTemperatureSlider()}
+        {this.state.geminiApiKeyPrompt && this.renderGeminiPrompt()}
+        {this.renderGeminiErrorBanner()}
         {this.renderMessages()}
         {this.renderInputBar()}
       </div>

@@ -1,9 +1,10 @@
 'use strict';
 
-const { ipcMain } = require('electron');
+const { ipcMain, app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const https = require('https');
 const deleteItem = require('../lib/delete-directory');
 const simulator = require('./simulator');
 const windowSimulator = require('./windowSimulator')
@@ -94,6 +95,115 @@ function streamChat({ model, messages, tools, temperature, liveStream, onChunk, 
   });
 }
 
+// Gemini streaming chat – same interface as streamChat above.
+function streamGeminiChat({ model, messages, tools, temperature, liveStream, onChunk, onThinking, abortState, apiKey }) {
+  return new Promise((resolve, reject) => {
+    let content = '';
+    let thinking = '';
+    const toolCalls = [];
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      abortState.destroy = null;
+      resolve(result);
+    };
+
+    const contents = messages.filter(m => m.role !== 'system').map(m => {
+      if (m.role === 'tool') {
+        let parsedResponse = {};
+        try { parsedResponse = JSON.parse(m.content || '{}'); } catch (_) {}
+        return { role: 'function', parts: [{ functionResponse: { name: m.tool_name || '', response: parsedResponse } }] };
+      }
+      return { role: m.role === 'assistant' ? 'model' : m.role, parts: [{ text: m.content || '' }] };
+    });
+
+    const systemMsg = messages.find(m => m.role === 'system');
+
+    const body = {
+      contents,
+      generationConfig: { temperature: temperature != null ? temperature : 0.7 },
+    };
+
+    if (tools && tools.length) {
+      body.tools = [{
+        functionDeclarations: tools.map(t => ({
+          name: t.function.name,
+          description: t.function.description,
+          parameters: t.function.parameters,
+        })),
+      }];
+    }
+
+    if (systemMsg) body.systemInstruction = { parts: [{ text: systemMsg.content }] };
+
+    const payload = JSON.stringify(body);
+    const url = 'https://generativelanguage.googleapis.com/v1/models/' + model + ':streamGenerateContent?alt=sse&key=' + encodeURIComponent(apiKey);
+
+    const req = https.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, (res) => {
+      let buf = '';
+      if (res.statusCode !== 200) {
+        res.on('data', chunk => buf += chunk);
+        res.on('end', () => {
+          let msg = 'Gemini API error (HTTP ' + res.statusCode + ')';
+          try { const e = JSON.parse(buf); if (e.error) msg = e.error.message || msg; } catch (_) {}
+          finish({ error: msg });
+        });
+        return;
+      }
+      res.on('data', chunk => {
+        if (abortState.aborted) return;
+        buf += chunk.toString();
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr || jsonStr === '[DONE]') continue;
+          try {
+            const obj = JSON.parse(jsonStr);
+            if (obj.error) { finish({ error: obj.error.message || 'Gemini API error' }); return; }
+            const candidate = obj.candidates && obj.candidates[0];
+            if (!candidate) continue;
+            if (candidate.content && candidate.content.parts) {
+              for (const part of candidate.content.parts) {
+                if (part.text) {
+                  content += part.text;
+                  if (liveStream) onChunk(part.text);
+                }
+                if (part.functionCall) {
+                  toolCalls.push({
+                    function: {
+                      name: part.functionCall.name,
+                      arguments: JSON.stringify(part.functionCall.args || {}),
+                    },
+                  });
+                }
+              }
+            }
+            if (candidate.finishReason && candidate.finishReason !== 'MAX_TOKENS') {
+              if (!settled && candidate.finishReason !== 'STOP') {
+                finish({ content, thinking, toolCalls });
+              }
+            }
+          } catch (_) {}
+        }
+      });
+      res.on('end', () => { if (!settled) finish({ content, thinking, toolCalls }); });
+    });
+
+    req.on('error', (e) => {
+      if (abortState.aborted) { finish({ content, thinking, toolCalls }); return; }
+      if (!settled) { settled = true; abortState.destroy = null; reject(e); }
+    });
+
+    abortState.destroy = () => { req.destroy(); finish({ content, thinking, toolCalls }); };
+
+    req.write(payload);
+    req.end();
+  });
+}
+
 function parseEmulatedToolCall(content) {
   const match = TOOL_CALL_TAG_RE.exec(content);
   if (!match) return null;
@@ -125,129 +235,156 @@ function buildToolPreview(name, args) {
   return JSON.stringify(args);
 }
 
+// Shared tool-calling loop used by both Ollama and Gemini.
+async function runToolLoop({ model, messages, systemPrompt, temperature, supportsTools, event, channelPrefix, streamFn, projectRoot }) {
+  const abortState = { aborted: false, destroy: null };
+  let pendingApprovalReject = null;
+
+  const stopHandler = () => {
+    abortState.aborted = true;
+    if (pendingApprovalReject) pendingApprovalReject();
+    if (abortState.destroy) abortState.destroy();
+    event.sender.send(channelPrefix + '-chat-done', { aborted: true });
+  };
+  ipcMain.once(channelPrefix + '-stop', stopHandler);
+
+  function waitForApproval(id) {
+    return new Promise((resolve) => {
+      pendingApprovalReject = () => resolve(false);
+      ipcMain.once(channelPrefix + '-tool-response-' + id, (_event, { approved }) => {
+        pendingApprovalReject = null;
+        resolve(approved);
+      });
+    });
+  }
+
+  async function runToolCall(toolCall) {
+    const name = toolCall.function ? toolCall.function.name : toolCall.name;
+    const args = normalizeToolArgs(toolCall.function ? toolCall.function.arguments : toolCall.arguments);
+    const id = 'tool-' + Math.random().toString(36).slice(2) + '-' + name;
+    const def = getToolByName(name);
+
+    if (!def) {
+      const outcome = { ok: false, error: 'Unknown tool: ' + name };
+      event.sender.send(channelPrefix + '-tool-result', { id, name, ...outcome, provider: channelPrefix === 'gemini' ? 'gemini' : 'ollama' });
+      return outcome;
+    }
+
+    if (def.approvalRequired) {
+      event.sender.send(channelPrefix + '-tool-request', { id, name, arguments: args, preview: buildToolPreview(name, args), provider: channelPrefix === 'gemini' ? 'gemini' : 'ollama' });
+      const approved = await waitForApproval(id);
+      if (abortState.aborted) return { ok: false, error: 'Stopped by user.' };
+      if (!approved) {
+        const outcome = { ok: false, error: 'The user denied this action.' };
+        event.sender.send(channelPrefix + '-tool-result', { id, name, ...outcome, provider: channelPrefix === 'gemini' ? 'gemini' : 'ollama' });
+        return outcome;
+      }
+    } else {
+      event.sender.send(channelPrefix + '-tool-auto', { id, name, arguments: args, provider: channelPrefix === 'gemini' ? 'gemini' : 'ollama' });
+    }
+
+    const outcome = await executeTool(name, args, projectRoot);
+    event.sender.send(channelPrefix + '-tool-result', { id, name, ok: outcome.ok, result: outcome.result, error: outcome.error, provider: channelPrefix === 'gemini' ? 'gemini' : 'ollama' });
+    if (outcome.changedFile) {
+      event.sender.send('ai-tool-file-changed', outcome.changedFile);
+    }
+    return outcome;
+  }
+
+  try {
+    let conversation = systemPrompt
+      ? [{ role: 'system', content: systemPrompt }, ...messages]
+      : messages.slice();
+
+    if (!supportsTools) {
+      conversation = [{ role: 'system', content: buildEmulationPromptBlock() }, ...conversation];
+    }
+
+    const nativeTools = supportsTools ? toOllamaToolSchemas() : undefined;
+
+    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS && !abortState.aborted; iteration++) {
+      const result = await streamFn({
+        model,
+        messages: conversation,
+        tools: nativeTools,
+        temperature,
+        liveStream: !!supportsTools,
+        onChunk: (chunk) => event.sender.send(channelPrefix + '-chat-chunk', chunk),
+        onThinking: (chunk) => event.sender.send(channelPrefix + '-chat-thinking', chunk),
+        abortState,
+      });
+
+      if (result && result.error) {
+        if (!abortState.aborted) event.sender.send(channelPrefix + '-chat-error', result.error);
+        break;
+      }
+
+      const { content, toolCalls } = result;
+      if (abortState.aborted) break;
+
+      let callsThisRound = toolCalls;
+      let emulatedCall = null;
+      if ((!callsThisRound || !callsThisRound.length) && !supportsTools) {
+        emulatedCall = parseEmulatedToolCall(content);
+        if (emulatedCall) callsThisRound = [emulatedCall];
+      }
+
+      if (!callsThisRound || !callsThisRound.length) {
+        if (!supportsTools && content) {
+          event.sender.send(channelPrefix + '-chat-chunk', content);
+        }
+        break;
+      }
+
+      conversation.push({ role: 'assistant', content, tool_calls: supportsTools ? toolCalls : undefined });
+
+      for (const call of callsThisRound) {
+        const outcome = await runToolCall(call);
+        if (abortState.aborted) break;
+        const name = call.function ? call.function.name : call.name;
+        if (supportsTools) {
+          conversation.push({ role: 'tool', tool_name: name, content: JSON.stringify(outcome) });
+        } else {
+          conversation.push({ role: 'user', content: 'Tool result for ' + name + ':\n' + JSON.stringify(outcome) });
+        }
+      }
+
+      if (iteration === MAX_TOOL_ITERATIONS - 1 && !abortState.aborted) {
+        event.sender.send(channelPrefix + '-chat-chunk', '\n\n(Stopped after ' + MAX_TOOL_ITERATIONS + ' tool calls without a final answer.)');
+      }
+    }
+
+    if (!abortState.aborted) event.sender.send(channelPrefix + '-chat-done', {});
+  } catch (e) {
+    if (!abortState.aborted) event.sender.send(channelPrefix + '-chat-error', e.message);
+  } finally {
+    ipcMain.removeListener(channelPrefix + '-stop', stopHandler);
+  }
+}
+
 module.exports = () => {
   //ipcMain listeners
 
   ipcMain.on('ollama-chat', async (event, { model, messages, systemPrompt, temperature, supportsTools, projectRoot }) => {
-    const abortState = { aborted: false, destroy: null };
-    let pendingApprovalReject = null;
+    await runToolLoop({
+      model, messages, systemPrompt, temperature, supportsTools,
+      event,
+      channelPrefix: 'ollama',
+      streamFn: streamChat,
+      projectRoot,
+    });
+  });
 
-    const stopHandler = () => {
-      abortState.aborted = true;
-      if (pendingApprovalReject) pendingApprovalReject();
-      if (abortState.destroy) abortState.destroy();
-      event.sender.send('ollama-chat-done', { aborted: true });
-    };
-    ipcMain.once('ollama-stop', stopHandler);
-
-    function waitForApproval(id) {
-      return new Promise((resolve) => {
-        pendingApprovalReject = () => resolve(false);
-        ipcMain.once('ollama-tool-response-' + id, (_event, { approved }) => {
-          pendingApprovalReject = null;
-          resolve(approved);
-        });
-      });
-    }
-
-    async function runToolCall(toolCall) {
-      const name = toolCall.function ? toolCall.function.name : toolCall.name;
-      const args = normalizeToolArgs(toolCall.function ? toolCall.function.arguments : toolCall.arguments);
-      const id = 'tool-' + Math.random().toString(36).slice(2) + '-' + name;
-      const def = getToolByName(name);
-
-      if (!def) {
-        const outcome = { ok: false, error: 'Unknown tool: ' + name };
-        event.sender.send('ollama-tool-result', { id, name, ...outcome });
-        return outcome;
-      }
-
-      if (def.approvalRequired) {
-        event.sender.send('ollama-tool-request', { id, name, arguments: args, preview: buildToolPreview(name, args) });
-        const approved = await waitForApproval(id);
-        if (abortState.aborted) return { ok: false, error: 'Stopped by user.' };
-        if (!approved) {
-          const outcome = { ok: false, error: 'The user denied this action.' };
-          event.sender.send('ollama-tool-result', { id, name, ...outcome });
-          return outcome;
-        }
-      } else {
-        event.sender.send('ollama-tool-auto', { id, name, arguments: args });
-      }
-
-      const outcome = await executeTool(name, args, projectRoot);
-      event.sender.send('ollama-tool-result', { id, name, ok: outcome.ok, result: outcome.result, error: outcome.error });
-      if (outcome.changedFile) {
-        event.sender.send('ai-tool-file-changed', outcome.changedFile);
-      }
-      return outcome;
-    }
-
-    try {
-      let conversation = systemPrompt
-        ? [{ role: 'system', content: systemPrompt }, ...messages]
-        : messages.slice();
-
-      if (!supportsTools) {
-        conversation = [{ role: 'system', content: buildEmulationPromptBlock() }, ...conversation];
-      }
-
-      const nativeTools = supportsTools ? toOllamaToolSchemas() : undefined;
-
-      for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS && !abortState.aborted; iteration++) {
-        const { content, toolCalls } = await streamChat({
-          model,
-          messages: conversation,
-          tools: nativeTools,
-          temperature,
-          liveStream: !!supportsTools,
-          onChunk: (chunk) => event.sender.send('ollama-chat-chunk', chunk),
-          onThinking: (chunk) => event.sender.send('ollama-chat-thinking', chunk),
-          abortState,
-        });
-
-        if (abortState.aborted) break;
-
-        let callsThisRound = toolCalls;
-        let emulatedCall = null;
-        if ((!callsThisRound || !callsThisRound.length) && !supportsTools) {
-          emulatedCall = parseEmulatedToolCall(content);
-          if (emulatedCall) callsThisRound = [emulatedCall];
-        }
-
-        if (!callsThisRound || !callsThisRound.length) {
-          // Final answer for this turn.
-          if (!supportsTools && content) {
-            event.sender.send('ollama-chat-chunk', content);
-          }
-          break;
-        }
-
-        // Assistant's turn included tool call(s) - record it, then run each tool.
-        conversation.push({ role: 'assistant', content, tool_calls: supportsTools ? toolCalls : undefined });
-
-        for (const call of callsThisRound) {
-          const outcome = await runToolCall(call);
-          if (abortState.aborted) break;
-          const name = call.function ? call.function.name : call.name;
-          if (supportsTools) {
-            conversation.push({ role: 'tool', tool_name: name, content: JSON.stringify(outcome) });
-          } else {
-            conversation.push({ role: 'user', content: 'Tool result for ' + name + ':\n' + JSON.stringify(outcome) });
-          }
-        }
-
-        if (iteration === MAX_TOOL_ITERATIONS - 1 && !abortState.aborted) {
-          event.sender.send('ollama-chat-chunk', '\n\n(Stopped after ' + MAX_TOOL_ITERATIONS + ' tool calls without a final answer.)');
-        }
-      }
-
-      if (!abortState.aborted) event.sender.send('ollama-chat-done', {});
-    } catch (e) {
-      if (!abortState.aborted) event.sender.send('ollama-chat-error', e.message);
-    } finally {
-      ipcMain.removeListener('ollama-stop', stopHandler);
-    }
+  ipcMain.on('gemini-chat', async (event, { model, messages, systemPrompt, temperature, projectRoot, apiKey }) => {
+    const geminiStreamFn = (params) => streamGeminiChat({ ...params, apiKey });
+    await runToolLoop({
+      model, messages, systemPrompt, temperature,
+      supportsTools: true,
+      event,
+      channelPrefix: 'gemini',
+      streamFn: geminiStreamFn,
+      projectRoot,
+    });
   });
 
   ipcMain.on('ollama-list-models', (event) => {
@@ -308,6 +445,68 @@ module.exports = () => {
   });
   ipcMain.on('closeSim', (event, pid) => {
     closeSim(pid);
+  });
+
+  // ---- Gemini BYOK handlers ----
+  ipcMain.on('gemini-list-models', (event, { apiKey }) => {
+    https.get('https://generativelanguage.googleapis.com/v1/models?key=' + encodeURIComponent(apiKey), (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        if (res.statusCode !== 200) {
+          var errType = 'invalidKey';
+          try {
+            var e = JSON.parse(body);
+            if (e.error && (e.error.status === 'RESOURCE_EXHAUSTED' || e.error.status === 'QUOTA_EXCEEDED')) {
+              errType = 'quotaExceeded';
+            }
+          } catch (_) {}
+          event.sender.send('gemini-models-list', { error: errType });
+          return;
+        }
+        try {
+          var data = JSON.parse(body);
+          var models = (data.models || [])
+            .filter(function (m) { return m.supportedGenerationMethods && m.supportedGenerationMethods.indexOf('generateContent') !== -1; })
+            .map(function (m) {
+              return {
+                name: m.name.replace('models/', ''),
+                provider: 'gemini',
+                source: 'cloud',
+                supportsTools: true,
+              };
+            });
+          event.sender.send('gemini-models-list', { models: models });
+        } catch (e) {
+          event.sender.send('gemini-models-list', { error: 'invalidKey' });
+        }
+      });
+    }).on('error', function () {
+      event.sender.send('gemini-models-list', { error: 'invalidKey' });
+    });
+  });
+
+  ipcMain.on('gemini-get-key', (event) => {
+    var keyPath = path.join(app.getPath('userData'), 'gemini_key.json');
+    fs.readFile(keyPath, 'utf8', function (err, data) {
+      if (err) {
+        event.sender.send('gemini-get-key-response', { key: null });
+        return;
+      }
+      try {
+        var parsed = JSON.parse(data);
+        event.sender.send('gemini-get-key-response', { key: parsed.key || null });
+      } catch (e) {
+        event.sender.send('gemini-get-key-response', { key: null });
+      }
+    });
+  });
+
+  ipcMain.on('gemini-set-key', (event, { apiKey }) => {
+    var keyPath = path.join(app.getPath('userData'), 'gemini_key.json');
+    fs.writeFile(keyPath, JSON.stringify({ key: apiKey }), 'utf8', function (err) {
+      event.sender.send('gemini-set-key-response', { success: !err });
+    });
   });
 
   // ---- Real PTY terminal (Git Bash via node-pty in a system-Node child process) ----

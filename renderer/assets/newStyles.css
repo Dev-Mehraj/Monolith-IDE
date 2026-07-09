@@ -1163,3 +1163,8 @@ input, textarea, select {
   border: none !important;
   background: rgba(0, 240, 255, 0.4) !important;
 }
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
