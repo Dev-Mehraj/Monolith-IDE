@@ -95,13 +95,14 @@ function streamChat({ model, messages, tools, temperature, liveStream, onChunk, 
   });
 }
 
-// Gemini streaming chat – same interface as streamChat above.
-function streamGeminiChat({ model, messages, tools, temperature, liveStream, onChunk, onThinking, abortState, apiKey }) {
+// NVIDIA NIM streaming chat – OpenAI-compatible API.
+function streamNvidiaChat({ model, messages, tools, temperature, liveStream, onChunk, onThinking, abortState, apiKey }) {
   return new Promise((resolve, reject) => {
     let content = '';
     let thinking = '';
     const toolCalls = [];
     let settled = false;
+    var toolCallsByIndex = {};
     const finish = (result) => {
       if (settled) return;
       settled = true;
@@ -109,43 +110,48 @@ function streamGeminiChat({ model, messages, tools, temperature, liveStream, onC
       resolve(result);
     };
 
-    const contents = messages.filter(m => m.role !== 'system').map(m => {
-      if (m.role === 'tool') {
-        let parsedResponse = {};
-        try { parsedResponse = JSON.parse(m.content || '{}'); } catch (_) {}
-        return { role: 'function', parts: [{ functionResponse: { name: m.tool_name || '', response: parsedResponse } }] };
-      }
-      return { role: m.role === 'assistant' ? 'model' : m.role, parts: [{ text: m.content || '' }] };
-    });
-
-    const systemMsg = messages.find(m => m.role === 'system');
-
     const body = {
-      contents,
-      generationConfig: { temperature: temperature != null ? temperature : 0.7 },
+      model: model,
+      messages: messages.map(function (m) {
+        if (m.role === 'system') return { role: 'system', content: m.content || '' };
+        if (m.role === 'tool') return { role: 'tool', tool_call_id: m.tool_call_id || '', content: m.content || '' };
+        return { role: m.role, content: m.content || '' };
+      }),
+      temperature: temperature != null ? temperature : 0.7,
+      stream: true,
     };
 
     if (tools && tools.length) {
-      body.tools = [{
-        functionDeclarations: tools.map(t => ({
-          name: t.function.name,
-          description: t.function.description,
-          parameters: t.function.parameters,
-        })),
-      }];
+      body.tools = tools;
     }
 
-    if (systemMsg) body.systemInstruction = { parts: [{ text: systemMsg.content }] };
+    // Add assistant tool_calls to the last assistant message if present
+    (function attachToolCalls() {
+      for (var i = body.messages.length - 1; i >= 0; i--) {
+        var msg = body.messages[i];
+        if (msg.role === 'assistant' && messages[i] && messages[i].tool_calls) {
+          msg.tool_calls = messages[i].tool_calls;
+          break;
+        }
+      }
+    })();
 
     const payload = JSON.stringify(body);
-    const url = 'https://generativelanguage.googleapis.com/v1/models/' + model + ':streamGenerateContent?alt=sse&key=' + encodeURIComponent(apiKey);
 
-    const req = https.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, (res) => {
+    const req = https.request({
+      hostname: 'integrate.api.nvidia.com',
+      path: '/v1/chat/completions',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey,
+      },
+    }, (res) => {
       let buf = '';
       if (res.statusCode !== 200) {
         res.on('data', chunk => buf += chunk);
         res.on('end', () => {
-          let msg = 'Gemini API error (HTTP ' + res.statusCode + ')';
+          let msg = 'NVIDIA API error (HTTP ' + res.statusCode + ')';
           try { const e = JSON.parse(buf); if (e.error) msg = e.error.message || msg; } catch (_) {}
           finish({ error: msg });
         });
@@ -162,34 +168,43 @@ function streamGeminiChat({ model, messages, tools, temperature, liveStream, onC
           if (!jsonStr || jsonStr === '[DONE]') continue;
           try {
             const obj = JSON.parse(jsonStr);
-            if (obj.error) { finish({ error: obj.error.message || 'Gemini API error' }); return; }
-            const candidate = obj.candidates && obj.candidates[0];
-            if (!candidate) continue;
-            if (candidate.content && candidate.content.parts) {
-              for (const part of candidate.content.parts) {
-                if (part.text) {
-                  content += part.text;
-                  if (liveStream) onChunk(part.text);
-                }
-                if (part.functionCall) {
-                  toolCalls.push({
-                    function: {
-                      name: part.functionCall.name,
-                      arguments: JSON.stringify(part.functionCall.args || {}),
-                    },
-                  });
-                }
-              }
+            if (obj.error) { finish({ error: obj.error.message || 'NVIDIA API error' }); return; }
+            const choices = obj.choices;
+            if (!choices || !choices.length) continue;
+            const delta = choices[0].delta || {};
+            if (delta.content) {
+              content += delta.content;
+              if (liveStream) onChunk(delta.content);
             }
-            if (candidate.finishReason && candidate.finishReason !== 'MAX_TOKENS') {
-              if (!settled && candidate.finishReason !== 'STOP') {
-                finish({ content, thinking, toolCalls });
+            if (delta.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                var idx = tc.index != null ? tc.index : 0;
+                if (!toolCallsByIndex[idx]) {
+                  toolCallsByIndex[idx] = { function: { name: '', arguments: '' } };
+                }
+                if (tc.id) {
+                  // first chunk for this tool call
+                }
+                if (tc.function) {
+                  if (tc.function.name) {
+                    toolCallsByIndex[idx].function.name += tc.function.name;
+                  }
+                  if (tc.function.arguments) {
+                    toolCallsByIndex[idx].function.arguments += tc.function.arguments;
+                  }
+                }
               }
             }
           } catch (_) {}
         }
       });
-      res.on('end', () => { if (!settled) finish({ content, thinking, toolCalls }); });
+      res.on('end', () => {
+        for (var idxKey in toolCallsByIndex) {
+          toolCalls.push(toolCallsByIndex[idxKey]);
+        }
+        toolCallsByIndex = {};
+        if (!settled) finish({ content, thinking, toolCalls });
+      });
     });
 
     req.on('error', (e) => {
@@ -235,7 +250,7 @@ function buildToolPreview(name, args) {
   return JSON.stringify(args);
 }
 
-// Shared tool-calling loop used by both Ollama and Gemini.
+// Shared tool-calling loop used by Ollama and NVIDIA NIM.
 async function runToolLoop({ model, messages, systemPrompt, temperature, supportsTools, event, channelPrefix, streamFn, projectRoot }) {
   const abortState = { aborted: false, destroy: null };
   let pendingApprovalReject = null;
@@ -266,25 +281,25 @@ async function runToolLoop({ model, messages, systemPrompt, temperature, support
 
     if (!def) {
       const outcome = { ok: false, error: 'Unknown tool: ' + name };
-      event.sender.send(channelPrefix + '-tool-result', { id, name, ...outcome, provider: channelPrefix === 'gemini' ? 'gemini' : 'ollama' });
+      event.sender.send(channelPrefix + '-tool-result', { id, name, ...outcome, provider: channelPrefix === 'nvidia' ? 'nvidia' : 'ollama' });
       return outcome;
     }
 
     if (def.approvalRequired) {
-      event.sender.send(channelPrefix + '-tool-request', { id, name, arguments: args, preview: buildToolPreview(name, args), provider: channelPrefix === 'gemini' ? 'gemini' : 'ollama' });
+      event.sender.send(channelPrefix + '-tool-request', { id, name, arguments: args, preview: buildToolPreview(name, args), provider: channelPrefix === 'nvidia' ? 'nvidia' : 'ollama' });
       const approved = await waitForApproval(id);
       if (abortState.aborted) return { ok: false, error: 'Stopped by user.' };
       if (!approved) {
         const outcome = { ok: false, error: 'The user denied this action.' };
-        event.sender.send(channelPrefix + '-tool-result', { id, name, ...outcome, provider: channelPrefix === 'gemini' ? 'gemini' : 'ollama' });
+        event.sender.send(channelPrefix + '-tool-result', { id, name, ...outcome, provider: channelPrefix === 'nvidia' ? 'nvidia' : 'ollama' });
         return outcome;
       }
     } else {
-      event.sender.send(channelPrefix + '-tool-auto', { id, name, arguments: args, provider: channelPrefix === 'gemini' ? 'gemini' : 'ollama' });
+      event.sender.send(channelPrefix + '-tool-auto', { id, name, arguments: args, provider: channelPrefix === 'nvidia' ? 'nvidia' : 'ollama' });
     }
 
     const outcome = await executeTool(name, args, projectRoot);
-    event.sender.send(channelPrefix + '-tool-result', { id, name, ok: outcome.ok, result: outcome.result, error: outcome.error, provider: channelPrefix === 'gemini' ? 'gemini' : 'ollama' });
+    event.sender.send(channelPrefix + '-tool-result', { id, name, ok: outcome.ok, result: outcome.result, error: outcome.error, provider: channelPrefix === 'nvidia' ? 'nvidia' : 'ollama' });
     if (outcome.changedFile) {
       event.sender.send('ai-tool-file-changed', outcome.changedFile);
     }
@@ -375,14 +390,14 @@ module.exports = () => {
     });
   });
 
-  ipcMain.on('gemini-chat', async (event, { model, messages, systemPrompt, temperature, projectRoot, apiKey }) => {
-    const geminiStreamFn = (params) => streamGeminiChat({ ...params, apiKey });
+  ipcMain.on('nvidia-chat', async (event, { model, messages, systemPrompt, temperature, projectRoot, apiKey }) => {
+    const nvidiaStreamFn = (params) => streamNvidiaChat({ ...params, apiKey });
     await runToolLoop({
       model, messages, systemPrompt, temperature,
       supportsTools: true,
       event,
-      channelPrefix: 'gemini',
-      streamFn: geminiStreamFn,
+      channelPrefix: 'nvidia',
+      streamFn: nvidiaStreamFn,
       projectRoot,
     });
   });
@@ -447,9 +462,14 @@ module.exports = () => {
     closeSim(pid);
   });
 
-  // ---- Gemini BYOK handlers ----
-  ipcMain.on('gemini-list-models', (event, { apiKey }) => {
-    https.get('https://generativelanguage.googleapis.com/v1/models?key=' + encodeURIComponent(apiKey), (res) => {
+  // ---- NVIDIA NIM BYOK handlers ----
+  ipcMain.on('nvidia-list-models', (event, { apiKey }) => {
+    var req = https.request({
+      hostname: 'integrate.api.nvidia.com',
+      path: '/v1/models',
+      method: 'GET',
+      headers: { 'Authorization': 'Bearer ' + apiKey },
+    }, (res) => {
       let body = '';
       res.on('data', chunk => body += chunk);
       res.on('end', () => {
@@ -457,55 +477,59 @@ module.exports = () => {
           var errType = 'invalidKey';
           try {
             var e = JSON.parse(body);
-            if (e.error && (e.error.status === 'RESOURCE_EXHAUSTED' || e.error.status === 'QUOTA_EXCEEDED')) {
-              errType = 'quotaExceeded';
+            if (e.error) {
+              if (e.error.code === 'RESOURCE_EXHAUSTED' || e.error.code === 'TOO_MANY_REQUESTS') {
+                errType = 'quotaExceeded';
+              }
             }
           } catch (_) {}
-          event.sender.send('gemini-models-list', { error: errType });
+          event.sender.send('nvidia-models-list', { error: errType });
           return;
         }
         try {
           var data = JSON.parse(body);
-          var models = (data.models || [])
-            .filter(function (m) { return m.supportedGenerationMethods && m.supportedGenerationMethods.indexOf('generateContent') !== -1; })
+          var models = (data.data || [])
+            .filter(function (m) { return m.id && m.object === 'model'; })
             .map(function (m) {
               return {
-                name: m.name.replace('models/', ''),
-                provider: 'gemini',
+                name: m.id,
+                provider: 'nvidia',
                 source: 'cloud',
                 supportsTools: true,
               };
             });
-          event.sender.send('gemini-models-list', { models: models });
+          event.sender.send('nvidia-models-list', { models: models });
         } catch (e) {
-          event.sender.send('gemini-models-list', { error: 'invalidKey' });
+          event.sender.send('nvidia-models-list', { error: 'invalidKey' });
         }
       });
-    }).on('error', function () {
-      event.sender.send('gemini-models-list', { error: 'invalidKey' });
     });
+    req.on('error', function () {
+      event.sender.send('nvidia-models-list', { error: 'invalidKey' });
+    });
+    req.end();
   });
 
-  ipcMain.on('gemini-get-key', (event) => {
-    var keyPath = path.join(app.getPath('userData'), 'gemini_key.json');
+  ipcMain.on('nvidia-get-key', (event) => {
+    var keyPath = path.join(app.getPath('userData'), 'nvidia_key.json');
     fs.readFile(keyPath, 'utf8', function (err, data) {
       if (err) {
-        event.sender.send('gemini-get-key-response', { key: null });
+        event.sender.send('nvidia-get-key-response', { key: null });
         return;
       }
       try {
         var parsed = JSON.parse(data);
-        event.sender.send('gemini-get-key-response', { key: parsed.key || null });
+        event.sender.send('nvidia-get-key-response', { key: parsed.key || null });
       } catch (e) {
-        event.sender.send('gemini-get-key-response', { key: null });
+        event.sender.send('nvidia-get-key-response', { key: null });
       }
     });
   });
 
-  ipcMain.on('gemini-set-key', (event, { apiKey }) => {
-    var keyPath = path.join(app.getPath('userData'), 'gemini_key.json');
+  ipcMain.on('nvidia-set-key', (event, { apiKey }) => {
+    var keyPath = path.join(app.getPath('userData'), 'nvidia_key.json');
     fs.writeFile(keyPath, JSON.stringify({ key: apiKey }), 'utf8', function (err) {
-      event.sender.send('gemini-set-key-response', { success: !err });
+      event.sender.send('nvidia-set-key-response', { success: !err });
     });
   });
 

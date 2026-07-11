@@ -112,6 +112,7 @@ export default class App extends React.Component {
       closed: false,
       toggleTerminal: false,
       aiChatOpen: false,
+      nvidiaKeyExists: false,
       externalChangeSignal: 0,
     };
 
@@ -138,6 +139,7 @@ export default class App extends React.Component {
     this.close = this.close.bind(this)
     this.toggleTerminal = this.toggleTerminal.bind(this);
     this.toggleAiChat = this.toggleAiChat.bind(this);
+    this.handleNvidiaClick = this.handleNvidiaClick.bind(this);
     this.updateFileDirectory = this.updateFileDirectory.bind(this);
 
     //reset tabs, should store state in local storage before doing this though
@@ -185,6 +187,17 @@ export default class App extends React.Component {
     ipcRenderer.on('closeSim', (event, arg) => {
       this.setState({ url: ' ' })
     })
+
+    // Track NVIDIA NIM API key state for toolbar button visibility
+    ipcRenderer.on('nvidia-get-key-response', (event, data) => {
+      this.setState({ nvidiaKeyExists: !!data.key });
+    });
+    ipcRenderer.on('nvidia-set-key-response', (event, data) => {
+      if (data.success) {
+        this.setState({ nvidiaKeyExists: true });
+      }
+    });
+    ipcRenderer.send('nvidia-get-key');
 
     // Keep an already-open tab in sync when the AI panel writes/edits that file on disk.
     ipcRenderer.on('ai-tool-file-changed', (event, data) => {
@@ -675,6 +688,9 @@ export default class App extends React.Component {
   toggleAiChat() {
     this.setState({ aiChatOpen: !this.state.aiChatOpen })
   }
+  handleNvidiaClick() {
+    this.setState({ aiChatOpen: true });
+  }
   /**
    * render function for TextEditorPane
    */
@@ -786,6 +802,8 @@ export default class App extends React.Component {
           closeTab={this.closeTab}
           cbOpenSimulator_Main={this.openSimulatorInMain}
           cbOpenSimulator_Ext={this.openSim}
+          showNvidiaButton={!this.state.nvidiaKeyExists}
+          onNvidiaClick={this.handleNvidiaClick}
         />)
     }
     else {
@@ -798,6 +816,8 @@ export default class App extends React.Component {
           closeTab={this.closeTab}
           cbOpenSimulator_Main={this.openSimulatorInMain}
           cbOpenSimulator_Ext={this.openSim}
+          showNvidiaButton={!this.state.nvidiaKeyExists}
+          onNvidiaClick={this.handleNvidiaClick}
         />)
       renderer.push(this.renderTextEditorPane());
     }

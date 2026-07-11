@@ -55,6 +55,8 @@ const TabContainer = ({
   cbOpenSimulator_Ext,
   close,
   toggleTerminal,
+  showNvidiaButton,
+  onNvidiaClick,
 }) => {
   const tabs = [];
   for (let key in appState.openTabs) {
@@ -98,6 +100,13 @@ const TabContainer = ({
             icon="fas fa-window-maximize fa-rotate-180"
             title="Toggle terminal"
           />
+          {showNvidiaButton && (
+            <ToolbarButton
+              onClick={onNvidiaClick}
+              icon="fas fa-key"
+              title="NVIDIA NIM"
+            />
+          )}
         </div>
       </div>
     </div>
