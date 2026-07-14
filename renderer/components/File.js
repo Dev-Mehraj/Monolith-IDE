@@ -3,7 +3,15 @@ import RenameForm from './RenameForm';
 import PropTypes from 'prop-types';
 import CreateMenu from './CreateMenu';
 
-const { getCssClassByFileExt } = require('../../lib/file-tree');
+const { getFileIconPath } = require('../../lib/materialIcons');
+
+const fileIconStyle = {
+  width: 16,
+  height: 16,
+  marginRight: 6,
+  verticalAlign: 'middle',
+  flexShrink: 0,
+};
 
 const File = ({ file, dblClickHandler, selectedItem, id, clickHandler, renameFlag, renameHandler, openCreateMenu, openMenuId, createMenuHandler}) => {
   return (
@@ -16,7 +24,10 @@ const File = ({ file, dblClickHandler, selectedItem, id, clickHandler, renameFla
     {openMenuId === id ? <CreateMenu createMenuHandler={createMenuHandler} path = {file.path} type = {file.type} id={id} /> : <span />}
     {renameFlag && selectedItem.id === id
         ? <RenameForm renameHandler={renameHandler} />
-        : <span className={getCssClassByFileExt(file.ext)}>{file.name}</span>}
+        : <span style={{ display: 'flex', alignItems: 'center' }}>
+            <img src={getFileIconPath(file.name)} style={fileIconStyle} />
+            {file.name}
+          </span>}
     </li>
   );
 };

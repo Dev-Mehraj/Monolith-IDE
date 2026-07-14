@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Simulator</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: -apple-system, Segoe UI, Arial, sans-serif;
+    background: #1e1e1e;
+  }
+  #toolbar {
+    display: flex;
+    align-items: center;
+    height: 36px;
+    padding: 0 6px;
+    box-sizing: border-box;
+    background: #2d2d2d;
+    border-bottom: 1px solid #111;
+    -webkit-app-region: drag;
+  }
+  #toolbar button {
+    -webkit-app-region: no-drag;
+    width: 26px;
+    height: 26px;
+    margin-right: 4px;
+    background: #3c3c3c;
+    border: 1px solid #4a4a4a;
+    border-radius: 4px;
+    color: #ddd;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  #toolbar button:hover {
+    background: #4a4a4a;
+  }
+  #toolbar button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  #url-bar {
+    -webkit-app-region: no-drag;
+    flex: 1;
+    height: 24px;
+    margin: 0 6px;
+    padding: 0 8px;
+    border-radius: 12px;
+    border: 1px solid #4a4a4a;
+    background: #1a1a1a;
+    color: #eee;
+    font-size: 12px;
+    outline: none;
+  }
+  #url-bar:focus {
+    border-color: #007acc;
+  }
+  #content {
+    position: absolute;
+    top: 36px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+  webview {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="back-btn" title="Back">&#8592;</button>
+    <button id="forward-btn" title="Forward">&#8594;</button>
+    <button id="reload-btn" title="Reload">&#8635;</button>
+    <input id="url-bar" type="text" spellcheck="false" />
+  </div>
+  <div id="content">
+    <webview id="view" src="about:blank" allowpopups></webview>
+  </div>
+  <script>
+    var params = new URLSearchParams(window.location.search);
+    var initialUrl = params.get('url') || 'about:blank';
+
+    var view = document.getElementById('view');
+    var urlBar = document.getElementById('url-bar');
+    var backBtn = document.getElementById('back-btn');
+    var forwardBtn = document.getElementById('forward-btn');
+    var reloadBtn = document.getElementById('reload-btn');
+
+    urlBar.value = initialUrl;
+    view.addEventListener('dom-ready', function () {
+      view.setAttribute('src', initialUrl);
+    });
+
+    function normalize(input) {
+      var value = input.trim();
+      if (!value) return null;
+      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(value)) return value;
+      if (/^localhost(:\d+)?/.test(value) || /^\d{1,3}(\.\d{1,3}){3}/.test(value)) {
+        return 'http://' + value;
+      }
+      return value;
+    }
+
+    urlBar.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        var target = normalize(urlBar.value);
+        if (target) view.loadURL(target);
+      }
+    });
+
+    backBtn.addEventListener('click', function () {
+      if (view.canGoBack()) view.goBack();
+    });
+    forwardBtn.addEventListener('click', function () {
+      if (view.canGoForward()) view.goForward();
+    });
+    reloadBtn.addEventListener('click', function () {
+      view.reload();
+    });
+
+    view.addEventListener('did-navigate', function (e) {
+      urlBar.value = e.url;
+      backBtn.disabled = !view.canGoBack();
+      forwardBtn.disabled = !view.canGoForward();
+    });
+    view.addEventListener('did-navigate-in-page', function (e) {
+      urlBar.value = e.url;
+      backBtn.disabled = !view.canGoBack();
+      forwardBtn.disabled = !view.canGoForward();
+    });
+  </script>
+</body>
+</html>

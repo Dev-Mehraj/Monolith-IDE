@@ -5,6 +5,16 @@ import CreateForm from './CreateForm';
 import RenameForm from './RenameForm';
 import PropTypes from 'prop-types';
 
+const { getFolderIconPath } = require('../../lib/materialIcons');
+
+const folderIconStyle = {
+  width: 16,
+  height: 16,
+  marginRight: 6,
+  verticalAlign: 'middle',
+  flexShrink: 0,
+};
+
 const Directory = ({
   directory,
   dblClickHandler,
@@ -62,7 +72,8 @@ const Directory = ({
       onClick={(event) => clickHandler(id, directory.path, directory.type, event)}
       onContextMenu={(event) => openCreateMenu(id, directory.path, directory.type, event)}
     >
-      <span className="octi-file-directory">
+      <span style={{ display: 'flex', alignItems: 'center' }}>
+        <img src={getFolderIconPath(directory.name, directory.opened)} style={folderIconStyle} />
         {directory.name}
       </span>
       {/* <span className="plus-icon" onClick={(event) => openCreateMenu(id, directory.path, directory.type, event)}>+</span> */}

@@ -118,21 +118,6 @@ const menuTemplate = windowObj => [
   {
     role: 'window',
     submenu: [{ role: 'minimize' }, { role: 'close' }]
-  },
-  {
-    label: 'Developer Tools',
-    submenu: [
-      {
-        label: 'Toggle DevTools',
-        accelerator: process.platform == 'darwin' ? 'Command+I' : 'Ctrl+I',
-        click(item, focusedWindow) {
-          global.mainWindow.toggleDevTools()
-        }
-      },
-      {
-        role: 'reload'
-      }
-    ]
   }
 ];
 

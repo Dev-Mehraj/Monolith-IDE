@@ -1,7 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-const { getFileExt, getCssClassByFileExt } = require('../../lib/file-tree.js');
+const { getFileIconPath } = require('../../lib/materialIcons');
 
 class Tab extends React.PureComponent {
   constructor(props) {
@@ -35,7 +35,10 @@ class Tab extends React.PureComponent {
           transition: 'transform 100ms cubic-bezier(0.22, 1, 0.36, 1)',
         }}
       >
-        <div className={"title " + getCssClassByFileExt(getFileExt(name))}>{name}</div>
+        <div className="title" style={{ display: 'flex', alignItems: 'center' }}>
+          <img src={getFileIconPath(name)} style={{ width: 14, height: 14, marginRight: 5, flexShrink: 0 }} />
+          {name}
+        </div>
         <div className="close-icon" onClick={(event) => closeTab(path, event)} />
       </li>
     );

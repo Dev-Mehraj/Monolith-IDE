@@ -690,6 +690,21 @@ export default class AiChatPanel extends React.Component {
       return m.source !== "local";
     });
 
+    var cloudGroups = {};
+    var cloudGroupOrder = [];
+    cloudModels.forEach(function (m) {
+      var slashIdx = m.name.indexOf("/");
+      var provider = slashIdx > -1 ? m.name.slice(0, slashIdx) : "Cloud Models";
+      if (!cloudGroups[provider]) {
+        cloudGroups[provider] = [];
+        cloudGroupOrder.push(provider);
+      }
+      cloudGroups[provider].push(m);
+    });
+    cloudGroupOrder.sort(function (a, b) {
+      return a.localeCompare(b);
+    });
+
     return (
       <div
         style={{
@@ -724,17 +739,19 @@ export default class AiChatPanel extends React.Component {
               })}
             </optgroup>
           )}
-          {cloudModels.length > 0 && (
-            <optgroup label="Cloud Models">
-              {cloudModels.map(function (m) {
-                return (
-                  <option key={m.name} value={m.name}>
-                    {m.name + (m.supportsTools ? " [tools]" : "")}
-                  </option>
-                );
-              })}
-            </optgroup>
-          )}
+          {cloudGroupOrder.map(function (provider) {
+            return (
+              <optgroup key={provider} label={provider}>
+                {cloudGroups[provider].map(function (m) {
+                  return (
+                    <option key={m.name} value={m.name}>
+                      {m.name + (m.supportsTools ? " [tools]" : "")}
+                    </option>
+                  );
+                })}
+              </optgroup>
+            );
+          })}
         </select>
       </div>
     );

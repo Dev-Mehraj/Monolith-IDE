@@ -6,6 +6,24 @@ require('fix-path')();
 const { exec, spawn } = require('child_process');
 const { BrowserWindow } = require('electron');
 
+const CHROME_HTML = path.join(__dirname, 'simulatorChrome.html');
+
+// Opens a preview window with a custom HTML toolbar (back/forward/reload/url
+// bar) wrapping a <webview> that loads targetUrl, instead of loading
+// targetUrl directly into the window.
+function openPreviewWindow(targetUrl, width, height) {
+  const win = new BrowserWindow({
+    width,
+    height,
+    webPreferences: {
+      webviewTag: true
+    }
+  });
+  win.setMenu(null);
+  win.loadURL('file://' + CHROME_HTML + '?url=' + encodeURIComponent(targetUrl));
+  return win;
+}
+
 const simulator = () => {
   const WIDTH = 800;
   const HEIGHT = 600;
@@ -21,22 +39,12 @@ const simulator = () => {
       },
       (err, stdout, stderr) => {
         if(err) console.log(err);
-        let childWindow = new BrowserWindow({
-          width: WIDTH,
-          height: HEIGHT
-        });
-        childWindow.loadURL('http://localhost:3000');
-        childWindow.openDevTools();
+        openPreviewWindow('http://localhost:3000', WIDTH, HEIGHT);
       }
     );
   //Simulation for react-dev-server
   } else if (projInfo.devServerScript === 'run dev-server') {
-    let child = new BrowserWindow({
-      width: WIDTH,
-      height: HEIGHT
-    });
-    child.loadURL('http://localhost:8085');
-    child.openDevTools();
+    openPreviewWindow('http://localhost:8085', WIDTH, HEIGHT);
     // let child = exec(
     //   'npm run dev-server',
     //   {
@@ -53,12 +61,7 @@ const simulator = () => {
     //   }
     // );
   } else if (projInfo.htmlPath) {
-    let child = new BrowserWindow({
-      width: WIDTH,
-      height: HEIGHT
-    });
-    child.loadURL('file://' + projInfo.htmlPath);
-    child.openDevTools();
+    openPreviewWindow('file://' + projInfo.htmlPath, WIDTH, HEIGHT);
   } else {
     console.log('No Index.html found');
   }

@@ -96,19 +96,49 @@ function writeFile(projectRoot, { path: filePath, content }) {
   return { ok: true, result: { path: filePath, bytesWritten: Buffer.byteLength(content, 'utf8') }, changedFile: { path: resolved, content } };
 }
 
+// read_file prefixes every line with "N\t" for the model's reference. Weaker
+// models sometimes copy that prefix into old_string/new_string verbatim,
+// which then never matches the real file and loops forever. Detect that
+// shape (every line starts with digits + tab) and strip it before matching.
+function looksLikeNumberedDump(text) {
+  const lines = text.split('\n');
+  return lines.length > 0 && lines.every((line) => /^\d+\t/.test(line));
+}
+
+function stripLineNumberPrefixes(text) {
+  return text
+    .split('\n')
+    .map((line) => line.replace(/^\d+\t/, ''))
+    .join('\n');
+}
+
 function editFile(projectRoot, { path: filePath, old_string, new_string }) {
   const resolved = resolveSafePath(projectRoot, filePath);
   const original = fs.readFileSync(resolved, { encoding: 'utf8' });
-  const occurrences = original.split(old_string).length - 1;
+
+  let matchString = old_string;
+  let occurrences = original.split(matchString).length - 1;
+
+  if (occurrences === 0 && looksLikeNumberedDump(old_string)) {
+    const strippedOld = stripLineNumberPrefixes(old_string);
+    const strippedOccurrences = original.split(strippedOld).length - 1;
+    if (strippedOccurrences > 0) {
+      matchString = strippedOld;
+      occurrences = strippedOccurrences;
+      if (looksLikeNumberedDump(new_string)) {
+        new_string = stripLineNumberPrefixes(new_string);
+      }
+    }
+  }
 
   if (occurrences === 0) {
-    return { ok: false, error: 'old_string was not found in ' + filePath + '. Re-read the file and copy the exact text, or use write_file to create/overwrite it.' };
+    return { ok: false, error: 'old_string was not found in ' + filePath + '. Re-read the file and copy the exact text after the "N<TAB>" line-number prefix (do not include the prefix itself), or use write_file to create/overwrite it.' };
   }
   if (occurrences > 1) {
     return { ok: false, error: 'old_string matches ' + occurrences + ' locations in ' + filePath + '. Include more surrounding context so it matches exactly once.' };
   }
 
-  const updated = original.replace(old_string, new_string);
+  const updated = original.replace(matchString, new_string);
   fs.writeFileSync(resolved, updated, { encoding: 'utf8' });
   return { ok: true, result: { path: filePath }, changedFile: { path: resolved, content: updated } };
 }
